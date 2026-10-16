@@ -120,6 +120,7 @@ target_link_libraries(Tekken6 PRIVATE
     "-framework GameController"
     "-framework AudioToolbox"
     "-framework AVFoundation"
+    "-framework UniformTypeIdentifiers"
 )
 
 if(TARGET rex::runtime)

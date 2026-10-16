@@ -20,18 +20,22 @@ enum TekkenInputButtons : uint32_t {
     BTN_Y              = 1 << 15, // RP (2)
     BTN_LEFT_TRIGGER   = 1 << 16, // LT (3+4 Macro)
     BTN_RIGHT_TRIGGER  = 1 << 17, // RT (1+3 Macro)
+    BTN_RAGE_MACRO     = BTN_LEFT_SHOULDER | BTN_RIGHT_SHOULDER | BTN_LEFT_TRIGGER | BTN_RIGHT_TRIGGER, // 1+2+3+4
 };
 
 @protocol TouchOverlayDelegate <NSObject>
 - (void)touchInputChanged:(uint32_t)pressedButtons;
 - (void)togglePromotionRequested;
+- (void)toggleAspectRatioRequested;
 @end
 
 @interface TouchOverlayView : UIView
 
 @property (nonatomic, weak) id<TouchOverlayDelegate> delegate;
 @property (nonatomic, assign) BOOL isPromotion120Hz;
+@property (nonatomic, assign) BOOL isUltrawideFull;
 
 - (void)setControllerConnected:(BOOL)connected;
+- (void)updateAspectRatioButton:(BOOL)isFull;
 
 @end

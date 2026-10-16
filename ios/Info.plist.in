@@ -58,6 +58,27 @@
     <key>LSSupportsOpeningDocumentsInPlace</key>
     <true/>
     
+    <!-- Supported Game Document Types -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Xbox 360 Executable or Disc Image</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.data</string>
+                <string>public.content</string>
+                <string>public.item</string>
+                <string>public.disk-image</string>
+                <string>public.iso-image</string>
+            </array>
+        </dict>
+    </array>
+    
     <!-- Game Controller Framework Declarations -->
     <key>GCSupportedGamepads</key>
     <array>
