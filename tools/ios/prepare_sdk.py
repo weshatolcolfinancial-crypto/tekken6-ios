@@ -153,19 +153,19 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
                 vk_cmake.write_text(content, encoding="utf-8")
                 print(f"[OK] Added iOS guard to {vk_cmake.name}")
 
-    # 4. Patch root CMakeLists.txt to define REX_PLATFORM_IOS
+    # 4. Patch root CMakeLists.txt to define REX_PLATFORM_IOS at the top
     root_cmake = sdk_dir / "CMakeLists.txt"
     if root_cmake.exists():
         content = root_cmake.read_text(encoding="utf-8")
-        if "REX_PLATFORM_IOS" not in content:
+        if "add_compile_definitions(REX_PLATFORM_IOS=1)" not in content:
             insertion = (
-                "\nif(IOS)\n"
+                "if(IOS)\n"
                 "    add_compile_definitions(REX_PLATFORM_IOS=1)\n"
-                "endif()\n"
+                "endif()\n\n"
             )
-            content = content + insertion
+            content = insertion + content
             root_cmake.write_text(content, encoding="utf-8")
-            print("[OK] Added REX_PLATFORM_IOS definition to root CMakeLists.txt.")
+            print("[OK] Added REX_PLATFORM_IOS definition to top of root CMakeLists.txt.")
 
     # 5. Patch memory_posix.cpp: Use vm_region_64 and Mach memory entries on iOS
     mem_cpp = sdk_dir / "src" / "core" / "memory_posix.cpp"
@@ -175,7 +175,9 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             # Replace <mach/mach_vm.h> with iOS vm_region_64 wrapper
             content = re.sub(
                 r'#include\s*<mach/mach_vm\.h>',
-                '#if REX_PLATFORM_IOS\n#include <mach/vm_map.h>\n'
+                '#include <TargetConditionals.h>\n'
+                '#if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(REX_PLATFORM_IOS) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)\n'
+                '#include <mach/vm_map.h>\n'
                 'static inline kern_return_t mach_vm_region(vm_map_t task, mach_vm_address_t* address, '
                 'mach_vm_size_t* size, vm_region_flavor_t flavor, vm_region_info_t info, '
                 'mach_msg_type_number_t* info_count, mach_port_t* object_name) {\n'
@@ -189,7 +191,7 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             create_code = (
                 'FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path, size_t length,\n'
                 '                                          PageAccess access, bool commit) {\n'
-                '#if REX_PLATFORM_IOS\n'
+                '#if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(REX_PLATFORM_IOS) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)\n'
                 '  (void)path; (void)access; (void)commit;\n'
                 '  memory_object_size_t entry_size = length;\n'
                 '  mach_port_t entry = MACH_PORT_NULL;\n'
@@ -212,7 +214,7 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             # Patch CloseFileMappingHandle
             close_code = (
                 'void CloseFileMappingHandle(FileMappingHandle handle, const std::filesystem::path& path) {\n'
-                '#if REX_PLATFORM_IOS\n'
+                '#if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(REX_PLATFORM_IOS) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)\n'
                 '  (void)path;\n'
                 '  mach_port_deallocate(mach_task_self(), static_cast<mach_port_t>(handle));\n'
                 '  return;\n'
@@ -226,7 +228,7 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
 
             # Patch MapFileView
             map_code = (
-                '#if REX_PLATFORM_IOS\n'
+                '#if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(REX_PLATFORM_IOS) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)\n'
                 '  {\n'
                 '    vm_address_t address = reinterpret_cast<vm_address_t>(base_address);\n'
                 '    const kern_return_t kr = vm_map(\n'
