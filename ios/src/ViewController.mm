@@ -1,7 +1,7 @@
 #import "ViewController.h"
 #import "TouchOverlayView.h"
 #import "GameControllerManager.h"
-#import "../tekken6_hooks.h"
+#import "tekken6_hooks.h"
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
@@ -26,18 +26,20 @@ extern "C" {
     UIView *containerView = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
     containerView.backgroundColor = [UIColor blackColor];
     
-    // Configure CAMetalLayer
+    // Configure CAMetalLayer for maximum 120Hz ProMotion responsiveness
     _metalLayer = [CAMetalLayer layer];
     _metalLayer.device = MTLCreateSystemDefaultDevice();
     _metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
     _metalLayer.framebufferOnly = YES;
     _metalLayer.frame = containerView.bounds;
     
-    // Triple buffering for silky smooth 120Hz/60Hz pacing
+    // Triple buffering eliminates pipeline stalls when rendering at 8.33ms (120Hz)
     _metalLayer.maximumDrawableCount = 3;
+    _metalLayer.presentsWithTransaction = NO;
     
-    // In iOS 16+, allows CAMetalLayer presentation without internal frame throttling
+    // In iOS 16+, synchronize presentation with display refresh cadence
     if (@available(iOS 16.0, *)) {
+        _metalLayer.displaySyncEnabled = YES;
         _metalLayer.wantsExtendedDynamicRangeContent = NO;
     }
     
@@ -52,10 +54,23 @@ extern "C" {
     NSInteger maxFPS = [UIScreen mainScreen].maximumFramesPerSecond;
     _isProMotionSupported = (maxFPS >= 120);
     _proMotionEnabled = _isProMotionSupported;
+    
+    // Check if device is currently in Low Power Mode
+    if ([[NSProcessInfo processInfo] isLowPowerModeEnabled]) {
+        _proMotionEnabled = NO;
+        NSLog(@"[Tekken 6 iOS] Low Power Mode is active. Clamping refresh rate to 60Hz.");
+    }
+    
     g_tekken_enable_promotion_120hz = _proMotionEnabled;
     
-    NSLog(@"[Tekken 6 iOS] Screen maximum FPS: %ld, ProMotion Supported: %s",
-          (long)maxFPS, _isProMotionSupported ? "YES" : "NO");
+    NSLog(@"[Tekken 6 iOS] Screen maximum FPS: %ld, ProMotion Supported: %s, Initial: %s",
+          (long)maxFPS, _isProMotionSupported ? "YES" : "NO", _proMotionEnabled ? "120Hz" : "60Hz");
+    
+    // Register for power state changes (automatically adapt if user activates Low Power Mode)
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(powerStateDidChange:)
+                                                 name:NSProcessInfoPowerStateDidChangeNotification
+                                               object:nil];
     
     // Configure Display Link with ProMotion Frame Rate Range
     [self setupDisplayLink];
@@ -72,6 +87,22 @@ extern "C" {
     [[GameControllerManager sharedManager] startMonitoring];
 }
 
+- (void)powerStateDidChange:(NSNotification *)notification {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        BOOL isLowPower = [[NSProcessInfo processInfo] isLowPowerModeEnabled];
+        if (isLowPower) {
+            NSLog(@"[Tekken 6 iOS] Low Power Mode enabled: Setting display to 60Hz.");
+            self->_proMotionEnabled = NO;
+        } else {
+            self->_proMotionEnabled = self->_isProMotionSupported;
+            NSLog(@"[Tekken 6 iOS] Low Power Mode disabled: Restoring ProMotion %s.", self->_proMotionEnabled ? "120Hz" : "60Hz");
+        }
+        g_tekken_enable_promotion_120hz = self->_proMotionEnabled;
+        self->_touchOverlay.isPromotion120Hz = self->_proMotionEnabled;
+        [self setupDisplayLink];
+    });
+}
+
 - (void)setupDisplayLink {
     if (_displayLink) {
         [_displayLink invalidate];
@@ -82,10 +113,10 @@ extern "C" {
     
     if (@available(iOS 15.0, *)) {
         if (_proMotionEnabled) {
-            // Request full 120Hz high refresh rate range
-            _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(60.0f, 120.0f, 120.0f);
+            // Lock to 120Hz: Prevents iOS from dropping frames during combat animations
+            _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(120.0f, 120.0f, 120.0f);
         } else {
-            // Lock to 60Hz
+            // Standard 60Hz rate
             _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(60.0f, 60.0f, 60.0f);
         }
     } else {
@@ -128,7 +159,7 @@ extern "C" {
     
     _proMotionEnabled = !_proMotionEnabled;
     g_tekken_enable_promotion_120hz = _proMotionEnabled;
-    NSLog(@"[Tekken 6 iOS] Toggling ProMotion 120Hz mode -> %s", _proMotionEnabled ? "ON (120Hz)" : "OFF (60Hz)");
+    NSLog(@"[Tekken 6 iOS] Toggling ProMotion mode -> %s", _proMotionEnabled ? "120Hz" : "60Hz");
     [self setupDisplayLink];
 }
 
@@ -149,6 +180,7 @@ extern "C" {
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_displayLink invalidate];
     [[GameControllerManager sharedManager] stopMonitoring];
 }

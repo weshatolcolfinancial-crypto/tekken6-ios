@@ -31,6 +31,8 @@
     <!-- ProMotion 120Hz Support: Required to unlock 120Hz refresh on iPhone 13 Pro+ and iPad Pro -->
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
+    <key>CADisableMinimumFrameDuration</key>
+    <true/>
     
     <!-- Fullscreen Landscape Configuration -->
     <key>UIRequiresFullScreen</key>

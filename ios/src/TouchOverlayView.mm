@@ -42,7 +42,7 @@
         self.multipleTouchEnabled = YES;
         _haptic = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
         [_haptic prepare];
-        _isPromotion120hz = YES;
+        _isPromotion120Hz = YES;
         
         [self setupControls];
     }
@@ -180,10 +180,13 @@
     }
 }
 
-- (void)toggleProMotionTapped {
-    [_haptic impactOccurred];
-    _isPromotion120hz = !_isPromotion120hz;
-    if (_isPromotion120hz) {
+- (void)setIsPromotion120Hz:(BOOL)isPromotion120Hz {
+    _isPromotion120Hz = isPromotion120Hz;
+    [self updateProMotionButtonUI];
+}
+
+- (void)updateProMotionButtonUI {
+    if (_isPromotion120Hz) {
         [_btnProMotion setTitle:@"120Hz" forState:UIControlStateNormal];
         [_btnProMotion setTitleColor:[UIColor colorWithRed:0.2f green:1.0f blue:0.4f alpha:1.0f] forState:UIControlStateNormal];
         _btnProMotion.layer.borderColor = [UIColor colorWithRed:0.2f green:1.0f blue:0.4f alpha:0.7f].CGColor;
@@ -192,6 +195,12 @@
         [_btnProMotion setTitleColor:[UIColor colorWithRed:0.9f green:0.9f blue:0.2f alpha:1.0f] forState:UIControlStateNormal];
         _btnProMotion.layer.borderColor = [UIColor colorWithRed:0.9f green:0.9f blue:0.2f alpha:0.7f].CGColor;
     }
+}
+
+- (void)toggleProMotionTapped {
+    [_haptic impactOccurred];
+    _isPromotion120Hz = !_isPromotion120Hz;
+    [self updateProMotionButtonUI];
     
     if ([self.delegate respondsToSelector:@selector(togglePromotionRequested)]) {
         [self.delegate togglePromotionRequested];

@@ -1,6 +1,6 @@
 #import "AppDelegate.h"
 #import "ViewController.h"
-#import "../tekken6_hooks.h"
+#import "tekken6_hooks.h"
 
 @implementation AppDelegate
 

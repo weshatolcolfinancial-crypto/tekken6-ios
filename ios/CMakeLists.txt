@@ -91,6 +91,10 @@ target_compile_definitions(Tekken6 PRIVATE
     TEKKEN6_PROMOTION_120HZ=1
 )
 
+target_compile_options(Tekken6 PRIVATE
+    "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fobjc-arc>"
+)
+
 # Link Apple System Frameworks
 target_link_libraries(Tekken6 PRIVATE
     "-framework UIKit"
@@ -108,6 +112,11 @@ endif()
 
 if(MOLTENVK_FRAMEWORK)
     target_link_libraries(Tekken6 PRIVATE "${MOLTENVK_FRAMEWORK}")
+    add_custom_command(TARGET Tekken6 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:Tekken6>/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${MOLTENVK_FRAMEWORK}" "$<TARGET_BUNDLE_DIR:Tekken6>/Frameworks/MoltenVK.framework"
+        COMMENT "Embedding MoltenVK.framework into Tekken6.app/Frameworks"
+    )
 endif()
 
 set_target_properties(Tekken6 PROPERTIES
@@ -120,14 +129,17 @@ set_target_properties(Tekken6 PROPERTIES
     XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "16.0"
     XCODE_ATTRIBUTE_ENABLE_BITCODE "NO"
     XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO" # Sideloading via LiveContainer/SideStore
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "@executable_path/Frameworks"
 )
 
 # Custom target to package the app into an IPA for LiveContainer / SideStore
 add_custom_target(ipa
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/Payload"
     COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_BUNDLE_DIR:Tekken6>" "${CMAKE_CURRENT_BINARY_DIR}/Payload/Tekken6.app"
-    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}" && zip -qr "Tekken6.ipa" Payload
+    COMMAND zip -qr "Tekken6.ipa" Payload
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/Payload"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     DEPENDS Tekken6
     COMMENT "Packaging Tekken6.app into Tekken6.ipa for sideloading"
 )

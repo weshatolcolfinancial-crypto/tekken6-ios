@@ -14,6 +14,7 @@ extern uint32_t g_tekken_offscreen_height;
 extern bool g_tekken_enable_promotion_120hz;
 
 void Tekken6InitHooks();
+void Tekken6SetResolutionPreset(int preset);
 
 // Mid-assembly hooks defined in tekken6_config.toml
 void Tekken6StartupWait(void* context);

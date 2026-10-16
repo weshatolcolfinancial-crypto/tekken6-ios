@@ -22,6 +22,31 @@ void Tekken6InitHooks() {
     printf("[Tekken 6 iOS] ProMotion 120Hz presentation mode: %s\n", g_tekken_enable_promotion_120hz ? "ENABLED" : "LOCKED 60Hz");
 }
 
+void Tekken6SetResolutionPreset(int preset) {
+    switch (preset) {
+        case 1: // 720p (Recommended for 120Hz ProMotion stability and low thermals)
+            g_tekken_render_width = 1280;
+            g_tekken_render_height = 720;
+            g_tekken_offscreen_width = 1024;
+            g_tekken_offscreen_height = 1024;
+            break;
+        case 2: // 1080p (Crisp high-resolution mode for iPad Pro / iPhone Pro Max)
+            g_tekken_render_width = 1920;
+            g_tekken_render_height = 1080;
+            g_tekken_offscreen_width = 1536;
+            g_tekken_offscreen_height = 1536;
+            break;
+        case 0: // Original Xbox 360 native buffer
+        default:
+            g_tekken_render_width = 1024;
+            g_tekken_render_height = 576;
+            g_tekken_offscreen_width = 1024;
+            g_tekken_offscreen_height = 1024;
+            break;
+    }
+    printf("[Tekken 6 iOS] Resolution preset updated to %ux%u\n", g_tekken_render_width, g_tekken_render_height);
+}
+
 extern "C" {
 
 /**
