@@ -101,7 +101,14 @@ set(APP_SOURCES
 
 # Generated game recompilation code (if default.xex was processed)
 set(TEKKEN6_WITH_GAME OFF)
-if(EXISTS "${TEKKEN6_GEN_DIR}/sources.cmake")
+if(EXISTS "${TEKKEN6_REPO}/src/recompiled/sources.cmake")
+    set(TEKKEN6_GEN_DIR "${TEKKEN6_REPO}/src/recompiled")
+    set(TEKKEN6_WITH_GAME ON)
+    include("${TEKKEN6_GEN_DIR}/sources.cmake")
+    list(APPEND APP_SOURCES ${GENERATED_SOURCES})
+    message(STATUS "Including recompiled Tekken 6 guest code from ${TEKKEN6_GEN_DIR}")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/sources.cmake")
+    set(TEKKEN6_GEN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/generated/default")
     set(TEKKEN6_WITH_GAME ON)
     include("${TEKKEN6_GEN_DIR}/sources.cmake")
     list(APPEND APP_SOURCES ${GENERATED_SOURCES})
@@ -115,6 +122,7 @@ add_executable(Tekken6 MACOSX_BUNDLE ${APP_SOURCES})
 
 target_include_directories(Tekken6 PRIVATE
     "${TEKKEN6_REPO}/src"
+    "${TEKKEN6_REPO}/src/recompiled"
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${TEKKEN6_SDK}/include"
     "${TEKKEN6_GEN_DIR}"

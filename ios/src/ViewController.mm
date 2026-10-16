@@ -499,12 +499,16 @@ extern "C" {
     CGFloat btnH = 38.0f;
     CGFloat btnY = cardH - 50.0f;
     
-    // 1. Enter Viewport
+    // 1. Enter Viewport / Launch Game
     UIButton *btnEnter = [UIButton buttonWithType:UIButtonTypeCustom];
     btnEnter.frame = CGRectMake(18, btnY, btnW, btnH);
     btnEnter.backgroundColor = [UIColor colorWithRed:0.0f green:0.80f blue:1.0f alpha:0.95f];
     btnEnter.layer.cornerRadius = 10.0f;
+#if TEKKEN6_WITH_GAME
+    [btnEnter setTitle:@"Launch Game" forState:UIControlStateNormal];
+#else
     [btnEnter setTitle:@"Enter Viewport" forState:UIControlStateNormal];
+#endif
     [btnEnter setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
     btnEnter.titleLabel.font = [UIFont boldSystemFontOfSize:11.5f];
     [btnEnter addTarget:self action:@selector(dismissDashboardCard) forControlEvents:UIControlEventTouchUpInside];
@@ -542,6 +546,10 @@ extern "C" {
 
 - (void)dismissDashboardCard {
     [_haptic impactOccurred];
+    
+    NSString *gameDir = [self gameDirectoryPath];
+    Tekken6StartGuestEngine([gameDir UTF8String]);
+    
     if (_setupCardView) {
         [UIView animateWithDuration:0.35 animations:^{
             self->_setupCardView.alpha = 0.0f;

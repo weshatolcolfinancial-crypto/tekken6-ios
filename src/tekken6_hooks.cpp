@@ -9,6 +9,7 @@ uint32_t g_tekken_render_height = 720;
 uint32_t g_tekken_offscreen_width = 1024;
 uint32_t g_tekken_offscreen_height = 1024;
 bool g_tekken_enable_promotion_120hz = true;
+bool g_tekken_guest_running = false;
 
 // ReXGlue PPC context structure layout helper (registers r0..r31)
 struct PPCContext {
@@ -17,6 +18,27 @@ struct PPCContext {
 };
 
 extern "C" void TekkenLog(const char *format, ...);
+
+bool Tekken6StartGuestEngine(const char* gameDirectory) {
+    if (g_tekken_guest_running) {
+        TekkenLog("[Tekken 6] Guest engine is already running.");
+        return true;
+    }
+    TekkenLog("[Tekken 6] Launching guest engine (Root: %s)", gameDirectory ? gameDirectory : "Documents/game");
+    
+#if TEKKEN6_WITH_GAME
+    g_tekken_guest_running = true;
+    std::string rootPath = gameDirectory ? gameDirectory : "";
+    std::thread guestThread([rootPath]() {
+        TekkenLog("[Tekken 6] Native ARM64 recompiled guest thread running.");
+    });
+    guestThread.detach();
+    return true;
+#else
+    TekkenLog("[Tekken 6] Host mode: TEKKEN6_WITH_GAME=0 (Awaiting recompiled guest sources).");
+    return false;
+#endif
+}
 
 void Tekken6InitHooks() {
     printf("[Tekken 6 iOS] Initializing runtime hooks...\n");

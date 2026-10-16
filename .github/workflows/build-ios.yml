@@ -83,6 +83,8 @@ jobs:
           if [ -f "game/default.xex" ]; then
             echo "Found game/default.xex! Generating native C++ source code..."
             python3 tools/ios/generate_code.py
+          elif [ -f "src/recompiled/sources.cmake" ]; then
+            echo "Found pre-generated guest code in src/recompiled/!"
           else
             echo "Notice: game/default.xex not found. Building host probe/harness IPA."
             mkdir -p ios/generated/default
