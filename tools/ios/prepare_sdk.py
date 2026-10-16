@@ -76,6 +76,20 @@ def download_moltenvk(sdk_dir: pathlib.Path) -> None:
             print(f"[OK] Organized iOS MoltenVK framework at: {dst}")
             break
 
+    # Locate static libMoltenVK.a
+    static_candidates = list(mvk_dir.rglob("libMoltenVK.a"))
+    print(f"Discovered static libMoltenVK.a candidates: {[str(c) for c in static_candidates]}")
+    for lib in static_candidates:
+        if "ios" in str(lib).lower() or "iphone" in str(lib).lower():
+            target_fw_dir = mvk_dir / "ios-arm64"
+            target_fw_dir.mkdir(exist_ok=True)
+            dst_lib = target_fw_dir / "libMoltenVK.a"
+            if not dst_lib.exists():
+                import shutil
+                shutil.copy2(lib, dst_lib)
+            print(f"[OK] Organized iOS static libMoltenVK.a at: {dst_lib}")
+            break
+
     marker.write_text(f"{MOLTENVK_VERSION}\n")
     print(f"[OK] MoltenVK ready in {mvk_dir}")
 
@@ -305,6 +319,19 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             )
             fs_cpp.write_text(content, encoding="utf-8")
             print("[OK] Patched filesystem_posix.cpp for LiveContainer Frameworks/ dladdr path.")
+
+    # 8. Patch src/system/CMakeLists.txt: Build rexruntime as STATIC library on iOS
+    sys_cmake = sdk_dir / "src" / "system" / "CMakeLists.txt"
+    if sys_cmake.exists():
+        content = sys_cmake.read_text(encoding="utf-8")
+        if "if(IOS)" not in content:
+            content = re.sub(
+                r'add_library\s*\(\s*rexruntime\s+SHARED',
+                'if(IOS)\n    add_library(rexruntime STATIC\nelse()\n    add_library(rexruntime SHARED\nendif()',
+                content
+            )
+            sys_cmake.write_text(content, encoding="utf-8")
+            print("[OK] Patched src/system/CMakeLists.txt to build rexruntime as STATIC on iOS.")
 
 
 def main() -> int:

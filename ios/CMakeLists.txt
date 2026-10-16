@@ -25,6 +25,18 @@ if(NOT EXISTS "${MOLTENVK_DIR}")
     set(MOLTENVK_DIR "${TEKKEN6_SDK}/.nfsmw-ios/MoltenVK")
 endif()
 
+# Check for static libMoltenVK.a
+set(MOLTENVK_STATIC_LIB "${MOLTENVK_DIR}/ios-arm64/libMoltenVK.a")
+if(NOT EXISTS "${MOLTENVK_STATIC_LIB}")
+    file(GLOB_RECURSE STATIC_CANDS "${MOLTENVK_DIR}/*libMoltenVK.a")
+    foreach(c ${STATIC_CANDS})
+        if("${c}" MATCHES "ios")
+            set(MOLTENVK_STATIC_LIB "${c}")
+            break()
+        endif()
+    endforeach()
+endif()
+
 find_library(MOLTENVK_FRAMEWORK MoltenVK
     PATHS "${MOLTENVK_DIR}/ios-arm64" "${MOLTENVK_DIR}" "${TEKKEN6_SDK}"
     PATH_SUFFIXES ios-arm64
@@ -44,7 +56,12 @@ if(NOT MOLTENVK_FRAMEWORK OR NOT EXISTS "${MOLTENVK_FRAMEWORK}")
     endforeach()
 endif()
 
-message(STATUS "Selected MoltenVK Framework: ${MOLTENVK_FRAMEWORK}")
+if(EXISTS "${MOLTENVK_STATIC_LIB}")
+    message(STATUS "Selected Static MoltenVK: ${MOLTENVK_STATIC_LIB}")
+endif()
+if(MOLTENVK_FRAMEWORK)
+    message(STATUS "Selected MoltenVK Framework: ${MOLTENVK_FRAMEWORK}")
+endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -127,8 +144,26 @@ if(TARGET rex::runtime)
     target_link_libraries(Tekken6 PRIVATE rex::runtime)
 endif()
 
-if(MOLTENVK_FRAMEWORK)
+# If rexruntime is a shared library, ensure it is copied into Frameworks/
+if(TARGET rexruntime)
+    get_target_property(REX_LIB_TYPE rexruntime TYPE)
+    if(REX_LIB_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET Tekken6 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:Tekken6>/Frameworks"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:rexruntime>" "$<TARGET_BUNDLE_DIR:Tekken6>/Frameworks/"
+            COMMENT "Embedding librexruntime.dylib into Tekken6.app/Frameworks"
+        )
+    endif()
+endif()
+
+if(EXISTS "${MOLTENVK_STATIC_LIB}")
+    target_link_libraries(Tekken6 PRIVATE "${MOLTENVK_STATIC_LIB}")
+    target_link_libraries(Tekken6 PRIVATE "-framework IOSurface")
+elseif(MOLTENVK_FRAMEWORK)
     target_link_libraries(Tekken6 PRIVATE "${MOLTENVK_FRAMEWORK}")
+endif()
+
+if(MOLTENVK_FRAMEWORK AND EXISTS "${MOLTENVK_FRAMEWORK}")
     add_custom_command(TARGET Tekken6 POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:Tekken6>/Frameworks"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${MOLTENVK_FRAMEWORK}" "$<TARGET_BUNDLE_DIR:Tekken6>/Frameworks/MoltenVK.framework"
@@ -153,7 +188,7 @@ set_target_properties(Tekken6 PROPERTIES
     XCODE_ATTRIBUTE_ENABLE_BITCODE "NO"
     XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO" # Sideloading via LiveContainer/SideStore
     BUILD_WITH_INSTALL_RPATH TRUE
-    INSTALL_RPATH "@executable_path/Frameworks"
+    INSTALL_RPATH "@executable_path/Frameworks;@loader_path/Frameworks"
 )
 
 # Custom target to package the app into an IPA for LiveContainer / SideStore
