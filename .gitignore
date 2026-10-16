@@ -1,0 +1,26 @@
+# Build outputs
+build/
+build-ios/
+ios/build/
+ios/build-ios/
+ios/Payload/
+*.ipa
+*.app
+*.dSYM
+
+# ReXGlue generated code & SDK local cache
+ios/generated/
+rexglue-sdk-ios/
+.tekken6-ios/
+.nfsmw-ios/
+
+# User game assets
+game/
+*.iso
+*.xex
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,131 @@
+# =============================================================================
+#  Tekken 6 Recompiled - iOS Native App (arm64, iOS 16.0+)
+#  Supports ProMotion 120Hz, GameController, MoltenVK on Metal
+# =============================================================================
+
+cmake_minimum_required(VERSION 3.25)
+project(tekken6_ios LANGUAGES C CXX OBJC OBJCXX ASM)
+
+if(NOT IOS)
+    message(FATAL_ERROR "This build is configured for iOS. Run: cmake --preset ios")
+endif()
+
+set(TEKKEN6_REPO "${CMAKE_CURRENT_SOURCE_DIR}/.." CACHE PATH "Tekken 6 repository root")
+set(TEKKEN6_SDK "${TEKKEN6_REPO}/../rexglue-sdk-ios" CACHE PATH "ReXGlue SDK prepared for iOS")
+set(TEKKEN6_BUNDLE_ID "com.tekken6.ios" CACHE STRING "App bundle identifier")
+set(TEKKEN6_GEN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/generated/default" CACHE PATH "Generated guest code")
+
+get_filename_component(TEKKEN6_REPO "${TEKKEN6_REPO}" ABSOLUTE)
+get_filename_component(TEKKEN6_SDK "${TEKKEN6_SDK}" ABSOLUTE)
+
+# Locate MoltenVK framework in prepared SDK
+set(MOLTENVK_DIR "${TEKKEN6_SDK}/.tekken6-ios/MoltenVK")
+if(NOT EXISTS "${MOLTENVK_DIR}")
+    # Fallback to general SDK cache
+    set(MOLTENVK_DIR "${TEKKEN6_SDK}/.nfsmw-ios/MoltenVK")
+endif()
+
+find_library(MOLTENVK_FRAMEWORK MoltenVK
+    PATHS "${MOLTENVK_DIR}" "${TEKKEN6_SDK}"
+    PATH_SUFFIXES ios-arm64
+)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+
+set(REXGLUE_ENABLE_TRACY OFF CACHE BOOL "" FORCE)
+set(REXGLUE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(REXGLUE_USE_VULKAN ON CACHE BOOL "" FORCE)
+set(REXGLUE_USE_D3D12 OFF CACHE BOOL "" FORCE)
+
+if(EXISTS "${TEKKEN6_SDK}/CMakeLists.txt")
+    add_subdirectory("${TEKKEN6_SDK}" rexglue-sdk EXCLUDE_FROM_ALL)
+endif()
+
+# Configure Info.plist with ProMotion and GameController keys
+set(EXECUTABLE_NAME "Tekken6")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
+    @ONLY
+)
+
+# Application Sources
+set(APP_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/main.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/AppDelegate.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ViewController.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/TouchOverlayView.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/GameControllerManager.mm"
+    "${TEKKEN6_REPO}/src/tekken6_hooks.cpp"
+)
+
+# Generated game recompilation code (if default.xex was processed)
+set(TEKKEN6_WITH_GAME OFF)
+if(EXISTS "${TEKKEN6_GEN_DIR}/sources.cmake")
+    set(TEKKEN6_WITH_GAME ON)
+    include("${TEKKEN6_GEN_DIR}/sources.cmake")
+    list(APPEND APP_SOURCES ${GENERATED_SOURCES})
+    message(STATUS "Including recompiled Tekken 6 guest code from ${TEKKEN6_GEN_DIR}")
+else()
+    message(STATUS "No pre-generated code found at ${TEKKEN6_GEN_DIR}. Building probe harness.")
+endif()
+
+# iOS Application Target
+add_executable(Tekken6 MACOSX_BUNDLE ${APP_SOURCES})
+
+target_include_directories(Tekken6 PRIVATE
+    "${TEKKEN6_REPO}/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${TEKKEN6_SDK}/include"
+    "${TEKKEN6_GEN_DIR}"
+)
+
+target_compile_definitions(Tekken6 PRIVATE
+    REX_PLATFORM_IOS=1
+    TEKKEN6_PROMOTION_120HZ=1
+)
+
+# Link Apple System Frameworks
+target_link_libraries(Tekken6 PRIVATE
+    "-framework UIKit"
+    "-framework Foundation"
+    "-framework QuartzCore"
+    "-framework Metal"
+    "-framework GameController"
+    "-framework AudioToolbox"
+    "-framework AVFoundation"
+)
+
+if(TARGET rex::runtime)
+    target_link_libraries(Tekken6 PRIVATE rex::runtime)
+endif()
+
+if(MOLTENVK_FRAMEWORK)
+    target_link_libraries(Tekken6 PRIVATE "${MOLTENVK_FRAMEWORK}")
+endif()
+
+set_target_properties(Tekken6 PROPERTIES
+    MACOSX_BUNDLE YES
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
+    MACOSX_BUNDLE_BUNDLE_NAME "Tekken 6"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "${TEKKEN6_BUNDLE_ID}"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${TEKKEN6_BUNDLE_ID}"
+    XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2" # iPhone & iPad
+    XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "16.0"
+    XCODE_ATTRIBUTE_ENABLE_BITCODE "NO"
+    XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO" # Sideloading via LiveContainer/SideStore
+)
+
+# Custom target to package the app into an IPA for LiveContainer / SideStore
+add_custom_target(ipa
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/Payload"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_BUNDLE_DIR:Tekken6>" "${CMAKE_CURRENT_BINARY_DIR}/Payload/Tekken6.app"
+    COMMAND cd "${CMAKE_CURRENT_BINARY_DIR}" && zip -qr "Tekken6.ipa" Payload
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/Payload"
+    DEPENDS Tekken6
+    COMMENT "Packaging Tekken6.app into Tekken6.ipa for sideloading"
+)

@@ -1,0 +1,13 @@
+# Tekken 6 ReXGlue project manifest for iOS & Desktop
+
+[project]
+name = "tekken6"
+sdk_version = "0.10.0"
+game_root = "game"
+
+[entrypoint]
+file_path = "game/default.xex"
+out_directory_path = "ios/generated/default"
+includes = [
+  "tekken6_config.toml",
+]
