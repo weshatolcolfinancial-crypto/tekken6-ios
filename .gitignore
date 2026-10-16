@@ -1,6 +1,7 @@
 # Build outputs
 build/
 build-ios/
+build-host/
 ios/build/
 ios/build-ios/
 ios/Payload/

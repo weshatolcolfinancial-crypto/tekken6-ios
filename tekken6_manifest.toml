@@ -2,7 +2,7 @@
 
 [project]
 name = "tekken6"
-sdk_version = "0.10.0"
+sdk_version = "1.0.0"
 game_root = "game"
 
 [entrypoint]
