@@ -130,11 +130,12 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             "        add_library(vulkan INTERFACE)\n"
             "    endif()\n"
             "    if(NOT TARGET Vulkan::Loader)\n"
-            "        add_library(Vulkan::Loader INTERFACE)\n"
+            "        add_library(vulkan_loader_stub INTERFACE)\n"
+            "        add_library(Vulkan::Loader ALIAS vulkan_loader_stub)\n"
             "    endif()\n"
             "endif()\n"
         )
-        if "add_library(Vulkan::Loader INTERFACE)" not in content:
+        if "vulkan_loader_stub" not in content:
             content = ios_stubs + content
 
         tp_cmake.write_text(content, encoding="utf-8")
