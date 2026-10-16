@@ -408,11 +408,11 @@ static void EnsureRuntimeSetup(const char* gameDir) {
 #if __has_include(<rex/kernel/init.h>)
         config.kernel_init = rex::kernel::InitializeKernel;
 #endif
-        X_STATUS status = s_guestRuntime->Setup(config);
-        if (status == X_STATUS_SUCCESS) {
+        auto status = s_guestRuntime->Setup(std::move(config));
+        if (status == 0) {
             TekkenLog("[Tekken 6 Native] ReXGlue Runtime initialized successfully. KernelState active.");
         } else {
-            TekkenLog("[Tekken 6 Native] ReXGlue Runtime setup status: 0x%08X (using native memory arena fallback).", status);
+            TekkenLog("[Tekken 6 Native] ReXGlue Runtime setup status: 0x%08X (using native memory arena fallback).", (uint32_t)status);
         }
     } catch (const std::exception& e) {
         TekkenLog("[Tekken 6 Native] Runtime setup caught exception: %s", e.what());
