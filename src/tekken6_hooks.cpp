@@ -381,6 +381,47 @@ static void InitializeDispatchTable(uint8_t* base) {
 #endif
 }
 
+#if __has_include(<rex/runtime.h>)
+#include <rex/runtime.h>
+#endif
+#if __has_include(<rex/kernel/init.h>)
+#include <rex/kernel/init.h>
+#endif
+#if __has_include(<rex/system/thread_state.h>)
+#include <rex/system/thread_state.h>
+#endif
+
+#if __has_include(<rex/runtime.h>)
+static std::unique_ptr<rex::Runtime> s_guestRuntime;
+#if __has_include(<rex/system/thread_state.h>)
+static std::unique_ptr<rex::runtime::ThreadState> s_primaryGuestThreadState;
+#endif
+
+static void EnsureRuntimeSetup(const char* gameDir) {
+    if (s_guestRuntime || rex::Runtime::instance()) return;
+    try {
+        TekkenLog("[Tekken 6 Native] Initializing ReXGlue Runtime environment...");
+        std::filesystem::path gameRoot = gameDir ? gameDir : "game";
+        s_guestRuntime = std::make_unique<rex::Runtime>(gameRoot);
+        rex::RuntimeConfig config{};
+        config.tool_mode = false;
+#if __has_include(<rex/kernel/init.h>)
+        config.kernel_init = rex::kernel::InitializeKernel;
+#endif
+        X_STATUS status = s_guestRuntime->Setup(config);
+        if (status == X_STATUS_SUCCESS) {
+            TekkenLog("[Tekken 6 Native] ReXGlue Runtime initialized successfully. KernelState active.");
+        } else {
+            TekkenLog("[Tekken 6 Native] ReXGlue Runtime setup status: 0x%08X (using native memory arena fallback).", status);
+        }
+    } catch (const std::exception& e) {
+        TekkenLog("[Tekken 6 Native] Runtime setup caught exception: %s", e.what());
+    } catch (...) {
+        TekkenLog("[Tekken 6 Native] Runtime setup caught unknown exception.");
+    }
+}
+#endif
+
 static void* Tekken6GuestThread(void* arg) {
     const char* gameDir = reinterpret_cast<const char*>(arg);
     TekkenLog("==================================================");
@@ -403,15 +444,44 @@ static void* Tekken6GuestThread(void* arg) {
     // 2. Populate indirect call dispatch table
     InitializeDispatchTable(s_guestMemoryBase);
     
-    // 3. Prepare CPU Context and Stack
+    // 3. Setup KPCR (Processor Control Region), TLS array, and primary guest stack
+    const uint32_t stack_base = 0x7FF00000u;
+    const uint32_t stack_limit = 0x7F000000u; // 16MB stack limit
+    const uint32_t pcr_addr = 0x7FF10000u;
+    const uint32_t tls_addr = 0x7FF10800u;
+    
+    uint8_t* base = s_guestMemoryBase;
+    std::memset(base + pcr_addr, 0, 0x1000); // Zero KPCR & TLS memory block
+    
+    // Wire up X_KPCR fields according to Xbox 360 ABI
+    REX_STORE_U32(pcr_addr + 0x00, tls_addr);       // tls_ptr
+    REX_STORE_U32(pcr_addr + 0x30, pcr_addr);       // pcr_ptr (self reference)
+    REX_STORE_U32(pcr_addr + 0x70, stack_base);     // stack_base_ptr
+    REX_STORE_U32(pcr_addr + 0x74, stack_limit);    // stack_end_ptr (limit)
+    
+    // 4. Prepare CPU Context and Stack
     TekkenLog("[Tekken 6 Native] Initializing PowerPC execution context...");
     PPCContext ctx{};
-    
-    // Initialize primary guest thread stack at 0x7FF00000
-    uint8_t* base = s_guestMemoryBase;
-    ctx.r1.u32 = 0x7FF00000;
+    ctx.r1.u32 = stack_base;
     REX_STORE_U32(ctx.r1.u32, 0); // Null frame terminator
-    ctx.r13.u32 = 0x82000000;    // Small Data Area base pointer
+    ctx.r13.u32 = pcr_addr;       // r13 points to KPCR
+    
+#if __has_include(<rex/runtime.h>)
+    EnsureRuntimeSetup(gameDir);
+#if __has_include(<rex/system/thread_state.h>)
+    if (s_guestRuntime && s_guestRuntime->memory()) {
+        try {
+            s_primaryGuestThreadState = std::make_unique<rex::runtime::ThreadState>(
+                1, stack_base, pcr_addr, s_guestRuntime->memory()
+            );
+            rex::runtime::ThreadState::Bind(s_primaryGuestThreadState.get());
+            TekkenLog("[Tekken 6 Native] Bound ThreadState for guest thread (thid=1).");
+        } catch (...) {
+            TekkenLog("[Tekken 6 Native] Notice: ThreadState binding skipped.");
+        }
+    }
+#endif
+#endif
     
     TekkenLog("[Tekken 6 Native] Transferring control to retail entry point xstart at 0x824BEA50...");
     

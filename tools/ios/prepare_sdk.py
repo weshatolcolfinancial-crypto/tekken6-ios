@@ -273,10 +273,46 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             mem_cpp.write_text(content, encoding="utf-8")
             print("[OK] Patched memory_posix.cpp for iOS Mach VM.")
 
-    # 6. Patch xmemory.cpp
+    # 6. Patch xmemory.cpp: Use Mach vm_allocate for 4.5GB arena and MapFileView on iOS
     xmem_cpp = sdk_dir / "src" / "system" / "xmemory.cpp"
     if xmem_cpp.exists():
         content = xmem_cpp.read_text(encoding="utf-8")
+        if "mach_addr" not in content:
+            top_mach = (
+                "#if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(REX_PLATFORM_IOS) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)\n"
+                "#include <mach/mach.h>\n"
+                "#include <mach/vm_map.h>\n"
+                "#endif\n"
+            )
+            content = top_mach + content
+            ios_init = (
+                "#if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(REX_PLATFORM_IOS) || defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)\n"
+                "  mapping_base_ = nullptr;\n"
+                "  {\n"
+                "    vm_address_t mach_addr = 0;\n"
+                "    const size_t arena_size = 0x120000000ull;\n"
+                "    kern_return_t kr = vm_allocate(mach_task_self(), &mach_addr, arena_size, VM_FLAGS_ANYWHERE);\n"
+                "    if (kr != KERN_SUCCESS || mach_addr == 0) {\n"
+                "      kr = vm_allocate(mach_task_self(), &mach_addr, 0x100000000ull, VM_FLAGS_ANYWHERE);\n"
+                "    }\n"
+                "    if (kr == KERN_SUCCESS && mach_addr != 0) {\n"
+                "      mapping_base_ = reinterpret_cast<uint8_t*>(mach_addr);\n"
+                "      for (size_t i = 0; i < rex::countof(views_.all_views); ++i) {\n"
+                "        views_.all_views[i] = mapping_base_;\n"
+                "      }\n"
+                "    }\n"
+                "  }\n"
+                "  if (!mapping_base_) {\n"
+                "    REXSYS_ERROR(\"Unable to find a continuous block in the 64bit address space.\");\n"
+                "    assert_always();\n"
+                "    return false;\n"
+                "  }\n"
+                "#elif REX_PLATFORM_MAC"
+            )
+            content = content.replace(
+                "#if REX_PLATFORM_MAC\n  // On macOS, reserve a contiguous",
+                ios_init + "\n  // On macOS, reserve a contiguous"
+            )
         if "rex::memory::MapFileView(mapping_" not in content:
             mmap_call = (
                 '#if REX_PLATFORM_IOS\n'
@@ -293,8 +329,8 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
                 mmap_call,
                 content
             )
-            xmem_cpp.write_text(content, encoding="utf-8")
-            print("[OK] Patched xmemory.cpp for iOS MapFileView.")
+        xmem_cpp.write_text(content, encoding="utf-8")
+        print("[OK] Patched xmemory.cpp for iOS Mach VM and MapFileView.")
 
     # 7. Patch filesystem_posix.cpp for LiveContainer dlfcn path resolution
     fs_cpp = sdk_dir / "src" / "core" / "filesystem_posix.cpp"
@@ -317,8 +353,8 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
                 dladdr_hook,
                 content
             )
-            fs_cpp.write_text(content, encoding="utf-8")
-            print("[OK] Patched filesystem_posix.cpp for LiveContainer Frameworks/ dladdr path.")
+        fs_cpp.write_text(content, encoding="utf-8")
+        print("[OK] Patched filesystem_posix.cpp for LiveContainer Frameworks/ dladdr path.")
 
     # 8. Patch src/system/CMakeLists.txt: Build rexruntime as STATIC library on iOS
     sys_cmake = sdk_dir / "src" / "system" / "CMakeLists.txt"
@@ -328,6 +364,228 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             content = content.replace("add_library(rexruntime SHARED", "add_library(rexruntime STATIC")
             sys_cmake.write_text(content, encoding="utf-8")
             print("[OK] Patched src/system/CMakeLists.txt to build rexruntime as STATIC on iOS.")
+
+    # 9. Patch src/kernel/xboxkrnl/xboxkrnl_memory.cpp: Safe fallback allocators when KernelState is unbound
+    krnl_mem_cpp = sdk_dir / "src" / "kernel" / "xboxkrnl" / "xboxkrnl_memory.cpp"
+    if krnl_mem_cpp.exists():
+        content = krnl_mem_cpp.read_text(encoding="utf-8")
+        if "s_ios_fallback_virtual_bump" not in content:
+            header_injection = (
+                "\n#include <atomic>\n\n"
+                "namespace {\n"
+                "static std::atomic<uint32_t> s_ios_fallback_virtual_bump{0x10000000u};\n"
+                "static std::atomic<uint32_t> s_ios_fallback_phys_bump{0xA0000000u};\n"
+                "static std::atomic<uint32_t> s_ios_fallback_pool_bump{0x18000000u};\n"
+                "}\n\n"
+            )
+            content = header_injection + content
+
+            nt_alloc_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    uint32_t raw_size = region_size_ptr ? (int32_t(*region_size_ptr) < 0 ? -int32_t(region_size_ptr.value()) : region_size_ptr.value()) : 0;\n"
+                "    uint32_t adjusted_size = rex::round_up(raw_size ? raw_size : (64 * 1024), 64 * 1024);\n"
+                "    uint32_t address = base_addr_ptr ? *base_addr_ptr : 0;\n"
+                "    if (address == 0) {\n"
+                "      address = s_ios_fallback_virtual_bump.fetch_add(adjusted_size);\n"
+                "    }\n"
+                "    if (base_addr_ptr) *base_addr_ptr = address;\n"
+                "    if (region_size_ptr) *region_size_ptr = adjusted_size;\n"
+                "    REXKRNL_IMPORT_RESULT(\"NtAllocateVirtualMemory\", \"0x0 addr={:#x} size={:#x}\", address, adjusted_size);\n"
+                "    return X_STATUS_SUCCESS;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 NtAllocateVirtualMemory_entry\([^)]*\)\s*\{[\s\S]*?REXKRNL_IMPORT_TRACE\([^;]*;\s*)',
+                r'\1' + nt_alloc_guard,
+                content,
+                count=1
+            )
+
+            nt_free_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    if (region_size_ptr) *region_size_ptr = rex::round_up(*region_size_ptr, 64 * 1024);\n"
+                "    return X_STATUS_SUCCESS;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 NtFreeVirtualMemory_entry\([^)]*\)\s*\{[\s\S]*?REXKRNL_IMPORT_TRACE\([^;]*;\s*)',
+                r'\1' + nt_free_guard,
+                content,
+                count=1
+            )
+
+            nt_protect_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    if (old_protect) *old_protect = protect_bits;\n"
+                "    return X_STATUS_SUCCESS;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 NtProtectVirtualMemory_entry\([^)]*\)\s*\{)',
+                r'\1' + nt_protect_guard,
+                content,
+                count=1
+            )
+
+            nt_query_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    if (memory_information) {\n"
+                "      auto info = reinterpret_cast<X_MEMORY_BASIC_INFORMATION*>(memory_information.host_address());\n"
+                "      info->base_address = base_address;\n"
+                "      info->allocation_base = base_address;\n"
+                "      info->allocation_protect = X_PAGE_READWRITE;\n"
+                "      info->region_size = 64 * 1024;\n"
+                "      info->state = X_MEM_COMMIT;\n"
+                "      info->protect = X_PAGE_READWRITE;\n"
+                "      info->type = 0x20000;\n"
+                "    }\n"
+                "    if (return_length_ptr) *return_length_ptr = sizeof(X_MEMORY_BASIC_INFORMATION);\n"
+                "    return X_STATUS_SUCCESS;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 NtQueryVirtualMemory_entry\([^)]*\)\s*\{[\s\S]*?REXKRNL_IMPORT_TRACE\([^;]*;\s*)',
+                r'\1' + nt_query_guard,
+                content,
+                count=1
+            )
+
+            mm_alloc_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    uint32_t page_size = (protect_bits & X_MEM_LARGE_PAGES) ? (64 * 1024) : (4 * 1024);\n"
+                "    uint32_t adjusted_size = rex::round_up(region_size, page_size);\n"
+                "    uint32_t base_address = s_ios_fallback_phys_bump.fetch_add(adjusted_size);\n"
+                "    REXKRNL_IMPORT_RESULT(\"MmAllocatePhysicalMemoryEx\", \"addr={:#x} size={:#x}\", base_address, adjusted_size);\n"
+                "    return base_address;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 MmAllocatePhysicalMemoryEx_entry\([^)]*\)\s*\{[\s\S]*?REXKRNL_IMPORT_TRACE\([^;]*;\s*)',
+                r'\1' + mm_alloc_guard,
+                content,
+                count=1
+            )
+
+            mm_free_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    return;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(void MmFreePhysicalMemory_entry\([^)]*\)\s*\{[\s\S]*?REXKRNL_IMPORT_TRACE\([^;]*;\s*)',
+                r'\1' + mm_free_guard,
+                content,
+                count=1
+            )
+
+            mm_qprotect_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    return X_PAGE_READWRITE;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 MmQueryAddressProtect_entry\([^)]*\)\s*\{)',
+                r'\1' + mm_qprotect_guard,
+                content,
+                count=1
+            )
+
+            mm_qstats_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    return X_STATUS_SUCCESS;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 MmQueryStatistics_entry\([^)]*\)\s*\{)',
+                r'\1' + mm_qstats_guard,
+                content,
+                count=1
+            )
+
+            mm_getphys_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    return (base_address & 0x1FFFFFFFu);\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 MmGetPhysicalAddress_entry\([^)]*\)\s*\{)',
+                r'\1' + mm_getphys_guard,
+                content,
+                count=1
+            )
+
+            ex_pool_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    uint32_t adjusted_size = rex::round_up(size + sizeof(X_POOL_ALLOC_HEADER), 64);\n"
+                "    uint32_t addr = s_ios_fallback_pool_bump.fetch_add(adjusted_size);\n"
+                "    return addr + sizeof(X_POOL_ALLOC_HEADER);\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 ExAllocatePoolTypeWithTag_entry\([^)]*\)\s*\{)',
+                r'\1' + ex_pool_guard,
+                content,
+                count=1
+            )
+
+            ex_freepool_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    return;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(void ExFreePool_entry\([^)]*\)\s*\{)',
+                r'\1' + ex_freepool_guard,
+                content,
+                count=1
+            )
+
+            ke_pte_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    return 0;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 KeGetImagePageTableEntry_entry\([^)]*\)\s*\{)',
+                r'\1' + ke_pte_guard,
+                content,
+                count=1
+            )
+
+            mm_valid_guard = (
+                "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
+                "    return 1;\n"
+                "  }\n"
+            )
+            content = re.sub(
+                r'(u32 MmIsAddressValid_entry\([^)]*\)\s*\{)',
+                r'\1' + mm_valid_guard,
+                content,
+                count=1
+            )
+
+            krnl_mem_cpp.write_text(content, encoding="utf-8")
+            print("[OK] Patched xboxkrnl_memory.cpp with safe fallback guest allocators.")
+
+    # 10. Patch src/kernel/xboxkrnl/xboxkrnl_rtl.cpp: Safe thread checks for critical sections
+    krnl_rtl_cpp = sdk_dir / "src" / "kernel" / "xboxkrnl" / "xboxkrnl_rtl.cpp"
+    if krnl_rtl_cpp.exists():
+        content = krnl_rtl_cpp.read_text(encoding="utf-8")
+        if "XThread::GetCurrentThread() != nullptr" not in content:
+            content = content.replace(
+                "uint32_t cur_thread = XThread::GetCurrentThread()->guest_object();",
+                "uint32_t cur_thread = (XThread::GetCurrentThread() != nullptr) ? XThread::GetCurrentThread()->guest_object() : 1u;"
+            )
+            content = content.replace(
+                "uint32_t thread = XThread::GetCurrentThread()->guest_object();",
+                "uint32_t thread = (XThread::GetCurrentThread() != nullptr) ? XThread::GetCurrentThread()->guest_object() : 1u;"
+            )
+            content = content.replace(
+                "assert_true(cs->owning_thread == XThread::GetCurrentThread()->guest_object());",
+                "uint32_t expected_thread = (XThread::GetCurrentThread() != nullptr) ? XThread::GetCurrentThread()->guest_object() : 1u;\n  assert_true(cs->owning_thread == expected_thread);"
+            )
+            krnl_rtl_cpp.write_text(content, encoding="utf-8")
+            print("[OK] Patched xboxkrnl_rtl.cpp with safe critical section thread handling.")
 
 
 def main() -> int:
