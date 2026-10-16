@@ -384,7 +384,7 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
                 "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
                 "    uint32_t raw_size = region_size_ptr ? (int32_t(*region_size_ptr) < 0 ? -int32_t(region_size_ptr.value()) : region_size_ptr.value()) : 0;\n"
                 "    uint32_t adjusted_size = rex::round_up(raw_size ? raw_size : (64 * 1024), 64 * 1024);\n"
-                "    uint32_t address = base_addr_ptr ? *base_addr_ptr : 0;\n"
+                "    uint32_t address = base_addr_ptr ? static_cast<uint32_t>(*base_addr_ptr) : 0u;\n"
                 "    if (address == 0) {\n"
                 "      address = s_ios_fallback_virtual_bump.fetch_add(adjusted_size);\n"
                 "    }\n"
@@ -403,7 +403,7 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
 
             nt_free_guard = (
                 "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
-                "    if (region_size_ptr) *region_size_ptr = rex::round_up(*region_size_ptr, 64 * 1024);\n"
+                "    if (region_size_ptr) *region_size_ptr = rex::round_up(static_cast<uint32_t>(*region_size_ptr), 64 * 1024);\n"
                 "    return X_STATUS_SUCCESS;\n"
                 "  }\n"
             )
@@ -429,22 +429,20 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
 
             nt_query_guard = (
                 "\n  if (!REX_KERNEL_STATE() || !REX_KERNEL_MEMORY()) {\n"
-                "    if (memory_information) {\n"
-                "      auto info = reinterpret_cast<X_MEMORY_BASIC_INFORMATION*>(memory_information.host_address());\n"
-                "      info->base_address = base_address;\n"
-                "      info->allocation_base = base_address;\n"
-                "      info->allocation_protect = X_PAGE_READWRITE;\n"
-                "      info->region_size = 64 * 1024;\n"
-                "      info->state = X_MEM_COMMIT;\n"
-                "      info->protect = X_PAGE_READWRITE;\n"
-                "      info->type = 0x20000;\n"
+                "    if (memory_basic_information_ptr) {\n"
+                "      memory_basic_information_ptr->base_address = base_address;\n"
+                "      memory_basic_information_ptr->allocation_base = base_address;\n"
+                "      memory_basic_information_ptr->allocation_protect = X_PAGE_READWRITE;\n"
+                "      memory_basic_information_ptr->region_size = 64 * 1024;\n"
+                "      memory_basic_information_ptr->state = X_MEM_COMMIT;\n"
+                "      memory_basic_information_ptr->protect = X_PAGE_READWRITE;\n"
+                "      memory_basic_information_ptr->type = X_MEM_PRIVATE;\n"
                 "    }\n"
-                "    if (return_length_ptr) *return_length_ptr = sizeof(X_MEMORY_BASIC_INFORMATION);\n"
                 "    return X_STATUS_SUCCESS;\n"
                 "  }\n"
             )
             content = re.sub(
-                r'(u32 NtQueryVirtualMemory_entry\([^)]*\)\s*\{[\s\S]*?REXKRNL_IMPORT_TRACE\([^;]*;\s*)',
+                r'(u32 NtQueryVirtualMemory_entry\([^)]*\)\s*\{)',
                 r'\1' + nt_query_guard,
                 content,
                 count=1
