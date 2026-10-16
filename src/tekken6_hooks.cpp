@@ -11,12 +11,6 @@ uint32_t g_tekken_offscreen_height = 1024;
 bool g_tekken_enable_promotion_120hz = true;
 bool g_tekken_guest_running = false;
 
-// ReXGlue PPC context structure layout helper (registers r0..r31)
-struct PPCContext {
-    uint64_t r[32];
-    // Additional state truncated as we only access GPRs in these hooks
-};
-
 extern "C" void TekkenLog(const char *format, ...);
 
 bool Tekken6StartGuestEngine(const char* gameDirectory) {
