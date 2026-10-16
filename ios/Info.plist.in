@@ -63,6 +63,10 @@
     <key>CADisableMinimumFrameDuration</key>
     <true/>
     
+    <!-- Modern iOS Fullscreen Launch: Prevents 480x320 legacy compatibility mode -->
+    <key>UILaunchScreen</key>
+    <dict/>
+    
     <!-- Fullscreen Landscape Configuration -->
     <key>UIRequiresFullScreen</key>
     <true/>

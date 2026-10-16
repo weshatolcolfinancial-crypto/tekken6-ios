@@ -38,6 +38,7 @@ extern "C" {
     UIView *_setupCardView;
     UILabel *_statusBadge;
     NSString *_detectedGamePath;
+    NSArray<NSString *> *_detectedAssets;
     UIImpactFeedbackGenerator *_haptic;
 }
 @end
@@ -45,7 +46,18 @@ extern "C" {
 @implementation ViewController
 
 - (void)loadView {
-    UIView *containerView = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    UIScreen *screen = [UIScreen mainScreen];
+    CGFloat w = MAX(screen.bounds.size.width, screen.bounds.size.height);
+    CGFloat h = MIN(screen.bounds.size.width, screen.bounds.size.height);
+    
+    // In case iOS or compatibility sandbox reports legacy 480x320, recover true dimensions
+    if (w <= 480.0f && screen.nativeBounds.size.width > 0 && screen.nativeScale > 0) {
+        w = MAX(screen.nativeBounds.size.width, screen.nativeBounds.size.height) / screen.nativeScale;
+        h = MIN(screen.nativeBounds.size.width, screen.nativeBounds.size.height) / screen.nativeScale;
+    }
+    
+    UIView *containerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, h)];
+    containerView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     containerView.backgroundColor = [UIColor colorWithRed:0.04f green:0.05f blue:0.08f alpha:1.0f];
     
     _device = MTLCreateSystemDefaultDevice();
@@ -129,13 +141,13 @@ extern "C" {
 }
 
 - (void)setupFpsCounter {
-    _fpsHudLabel = [[UILabel alloc] initWithFrame:CGRectMake(24, 14, 210, 22)];
-    _fpsHudLabel.backgroundColor = [UIColor colorWithRed:0.04f green:0.06f blue:0.10f alpha:0.75f];
+    _fpsHudLabel = [[UILabel alloc] initWithFrame:CGRectMake(24, 12, 200, 22)];
+    _fpsHudLabel.backgroundColor = [UIColor colorWithRed:0.04f green:0.06f blue:0.10f alpha:0.80f];
     _fpsHudLabel.layer.cornerRadius = 11.0f;
     _fpsHudLabel.layer.borderWidth = 1.0f;
-    _fpsHudLabel.layer.borderColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.4f].CGColor;
+    _fpsHudLabel.layer.borderColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.45f].CGColor;
     _fpsHudLabel.layer.masksToBounds = YES;
-    _fpsHudLabel.font = [UIFont monospacedSystemFontOfSize:10.5f weight:UIFontWeightMedium];
+    _fpsHudLabel.font = [UIFont monospacedSystemFontOfSize:10.0f weight:UIFontWeightMedium];
     _fpsHudLabel.textColor = [UIColor colorWithRed:0.0f green:0.95f blue:1.0f alpha:1.0f];
     _fpsHudLabel.textAlignment = NSTextAlignmentCenter;
     _fpsHudLabel.text = @"120 FPS | 8.3ms | ProMotion";
@@ -178,13 +190,16 @@ extern "C" {
     
     [[TekkenLogger sharedLogger] logMessage:[NSString stringWithFormat:@"[Scanner] Scanning directory: %@", gameDir]];
     
-    // 1. Direct check: Documents/game/default.xex
-    NSString *primaryXex = [gameDir stringByAppendingPathComponent:@"default.xex"];
-    if ([fm fileExistsAtPath:primaryXex]) {
-        NSDictionary *attrs = [fm attributesOfItemAtPath:primaryXex error:nil];
-        unsigned long long sz = [attrs fileSize];
-        [[TekkenLogger sharedLogger] logMessage:[NSString stringWithFormat:@"[Scanner] Found primary executable: default.xex (%.2f MB)", sz / (1024.0 * 1024.0)]];
-        return primaryXex;
+    // 1. Direct check: Documents/game/default.xex (case-insensitive check)
+    NSArray *items = [fm contentsOfDirectoryAtPath:gameDir error:nil];
+    for (NSString *item in items) {
+        if ([item.lowercaseString isEqualToString:@"default.xex"]) {
+            NSString *primaryXex = [gameDir stringByAppendingPathComponent:item];
+            NSDictionary *attrs = [fm attributesOfItemAtPath:primaryXex error:nil];
+            unsigned long long sz = [attrs fileSize];
+            [[TekkenLogger sharedLogger] logMessage:[NSString stringWithFormat:@"[Scanner] Found primary executable: %@ (%.2f MB)", item, sz / (1024.0 * 1024.0)]];
+            return primaryXex;
+        }
     }
     
     // 2. Subfolder check: Documents/game/*/default.xex or .xex / .iso
@@ -204,10 +219,13 @@ extern "C" {
     // 3. Fallback: Documents/ root
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     NSString *docsRoot = paths.firstObject;
-    NSString *rootXex = [docsRoot stringByAppendingPathComponent:@"default.xex"];
-    if ([fm fileExistsAtPath:rootXex]) {
-        [[TekkenLogger sharedLogger] logMessage:[NSString stringWithFormat:@"[Scanner] Found executable in root Documents: %@", rootXex]];
-        return rootXex;
+    NSArray *rootItems = [fm contentsOfDirectoryAtPath:docsRoot error:nil];
+    for (NSString *item in rootItems) {
+        if ([item.lowercaseString isEqualToString:@"default.xex"]) {
+            NSString *rootXex = [docsRoot stringByAppendingPathComponent:item];
+            [[TekkenLogger sharedLogger] logMessage:[NSString stringWithFormat:@"[Scanner] Found executable in root Documents: %@", rootXex]];
+            return rootXex;
+        }
     }
     
     [[TekkenLogger sharedLogger] logMessage:@"[Scanner] No game executable (.xex or .iso) discovered."];
@@ -232,12 +250,11 @@ extern "C" {
 
 - (void)autoDetectGameAndLaunch {
     _detectedGamePath = [self scanForGameExecutable];
+    _detectedAssets = [self discoverAssetFolders];
     
     if (_detectedGamePath) {
         [[TekkenLogger sharedLogger] logMessage:[NSString stringWithFormat:@"[Tekken 6] Auto-detected game at: %@", _detectedGamePath]];
-        
-        NSArray<NSString *> *assets = [self discoverAssetFolders];
-        [[TekkenLogger sharedLogger] logMessage:[NSString stringWithFormat:@"[Tekken 6] Discovered %lu asset directory trees: %@", (unsigned long)assets.count, [assets componentsJoinedByString:@", "]]];
+        [[TekkenLogger sharedLogger] logMessage:[NSString stringWithFormat:@"[Tekken 6] Discovered %lu asset directory trees: %@", (unsigned long)_detectedAssets.count, [_detectedAssets componentsJoinedByString:@", "]]];
         
         [_touchOverlay setGameStatusBadgeText:@"GAME DETECTED" color:[UIColor colorWithRed:0.0f green:1.0f blue:0.5f alpha:1.0f]];
         
@@ -257,31 +274,30 @@ extern "C" {
         _setupCardView = nil;
     }
     
-    CGFloat cardW = MIN(self.view.bounds.size.width - 64.0f, 490.0f);
-    CGFloat cardH = 265.0f;
+    CGFloat w = self.view.bounds.size.width;
+    CGFloat h = self.view.bounds.size.height;
+    CGFloat cardW = MIN(w - 40.0f, 500.0f);
+    CGFloat cardH = MIN(h - 40.0f, 260.0f);
     
-    _setupCardView = [[UIView alloc] initWithFrame:CGRectMake((self.view.bounds.size.width - cardW)/2.0f,
-                                                              (self.view.bounds.size.height - cardH)/2.0f,
-                                                              cardW, cardH)];
-    _setupCardView.backgroundColor = [UIColor colorWithRed:0.06f green:0.07f blue:0.11f alpha:0.95f];
-    _setupCardView.layer.cornerRadius = 20.0f;
+    _setupCardView = [[UIView alloc] initWithFrame:CGRectMake((w - cardW)/2.0f, (h - cardH)/2.0f, cardW, cardH)];
+    _setupCardView.backgroundColor = [UIColor colorWithRed:0.06f green:0.07f blue:0.11f alpha:0.96f];
+    _setupCardView.layer.cornerRadius = 18.0f;
     _setupCardView.layer.borderWidth = 1.5f;
     _setupCardView.layer.borderColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.8f].CGColor;
     _setupCardView.layer.shadowColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.5f].CGColor;
-    _setupCardView.layer.shadowRadius = 18.0f;
+    _setupCardView.layer.shadowRadius = 16.0f;
     _setupCardView.layer.shadowOpacity = 0.6f;
-    _setupCardView.layer.shadowOffset = CGSizeZero;
     
     // Title
-    UILabel *titleLbl = [[UILabel alloc] initWithFrame:CGRectMake(20, 16, cardW - 40, 24)];
+    UILabel *titleLbl = [[UILabel alloc] initWithFrame:CGRectMake(20, 14, cardW - 40, 22)];
     titleLbl.text = @"TEKKEN 6 (XBOX 360)";
     titleLbl.textColor = [UIColor whiteColor];
-    titleLbl.font = [UIFont boldSystemFontOfSize:18.0f];
+    titleLbl.font = [UIFont boldSystemFontOfSize:17.0f];
     titleLbl.textAlignment = NSTextAlignmentCenter;
     [_setupCardView addSubview:titleLbl];
     
     // Status Badge
-    _statusBadge = [[UILabel alloc] initWithFrame:CGRectMake((cardW - 220)/2.0f, 46, 220, 22)];
+    _statusBadge = [[UILabel alloc] initWithFrame:CGRectMake((cardW - 220)/2.0f, 42, 220, 22)];
     _statusBadge.text = @"AWAITING GAME FILES";
     _statusBadge.textColor = [UIColor colorWithRed:1.0f green:0.75f blue:0.2f alpha:1.0f];
     _statusBadge.font = [UIFont boldSystemFontOfSize:11.0f];
@@ -292,10 +308,10 @@ extern "C" {
     [_setupCardView addSubview:_statusBadge];
     
     // Step Instructions
-    UILabel *guideLbl = [[UILabel alloc] initWithFrame:CGRectMake(24, 76, cardW - 48, 95)];
+    UILabel *guideLbl = [[UILabel alloc] initWithFrame:CGRectMake(24, 72, cardW - 48, 90)];
     guideLbl.numberOfLines = 4;
     guideLbl.textColor = [UIColor colorWithWhite:0.88f alpha:1.0f];
-    guideLbl.font = [UIFont systemFontOfSize:13.0f weight:UIFontWeightRegular];
+    guideLbl.font = [UIFont systemFontOfSize:12.5f weight:UIFontWeightRegular];
     guideLbl.text = @"1. Open iOS Files app on this device\n"
                     @"2. Navigate to: On My iPhone/iPad > Tekken 6 > game\n"
                     @"3. Copy your default.xex and game assets there\n"
@@ -304,29 +320,30 @@ extern "C" {
     
     // Auto-Detect Button
     UIButton *btnRescan = [UIButton buttonWithType:UIButtonTypeCustom];
-    btnRescan.frame = CGRectMake(24, cardH - 64, (cardW - 58)/2.0f, 44);
+    btnRescan.frame = CGRectMake(24, cardH - 58, (cardW - 58)/2.0f, 42);
     btnRescan.backgroundColor = [UIColor colorWithRed:0.0f green:0.80f blue:1.0f alpha:0.95f];
-    btnRescan.layer.cornerRadius = 14.0f;
+    btnRescan.layer.cornerRadius = 12.0f;
     [btnRescan setTitle:@"Auto-Detect" forState:UIControlStateNormal];
     [btnRescan setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
-    btnRescan.titleLabel.font = [UIFont boldSystemFontOfSize:14.0f];
+    btnRescan.titleLabel.font = [UIFont boldSystemFontOfSize:13.5f];
     [btnRescan addTarget:self action:@selector(rescanButtonTapped) forControlEvents:UIControlEventTouchUpInside];
     [_setupCardView addSubview:btnRescan];
     
-    // Import from Files Button (Direct Fallback)
+    // Import from Files Button
     UIButton *btnImport = [UIButton buttonWithType:UIButtonTypeCustom];
-    btnImport.frame = CGRectMake(CGRectGetMaxX(btnRescan.frame) + 10, cardH - 64, (cardW - 58)/2.0f, 44);
+    btnImport.frame = CGRectMake(CGRectGetMaxX(btnRescan.frame) + 10, cardH - 58, (cardW - 58)/2.0f, 42);
     btnImport.backgroundColor = [UIColor colorWithRed:0.15f green:0.18f blue:0.25f alpha:0.95f];
-    btnImport.layer.cornerRadius = 14.0f;
+    btnImport.layer.cornerRadius = 12.0f;
     btnImport.layer.borderWidth = 1.0f;
     btnImport.layer.borderColor = [UIColor colorWithWhite:0.45f alpha:0.8f].CGColor;
     [btnImport setTitle:@"Import from Files" forState:UIControlStateNormal];
     [btnImport setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    btnImport.titleLabel.font = [UIFont boldSystemFontOfSize:13.0f];
+    btnImport.titleLabel.font = [UIFont boldSystemFontOfSize:12.5f];
     [btnImport addTarget:self action:@selector(importFilesButtonTapped) forControlEvents:UIControlEventTouchUpInside];
     [_setupCardView addSubview:btnImport];
     
     [self.view addSubview:_setupCardView];
+    [self.view bringSubviewToFront:_setupCardView];
 }
 
 #pragma mark - Combat Dashboard & Diagnostic Card
@@ -337,14 +354,14 @@ extern "C" {
         _setupCardView = nil;
     }
     
-    CGFloat cardW = MIN(self.view.bounds.size.width - 48.0f, 520.0f);
-    CGFloat cardH = 295.0f;
+    CGFloat w = self.view.bounds.size.width;
+    CGFloat h = self.view.bounds.size.height;
+    CGFloat cardW = MIN(w - 40.0f, 520.0f);
+    CGFloat cardH = MIN(h - 40.0f, 290.0f);
     
-    _setupCardView = [[UIView alloc] initWithFrame:CGRectMake((self.view.bounds.size.width - cardW)/2.0f,
-                                                              (self.view.bounds.size.height - cardH)/2.0f,
-                                                              cardW, cardH)];
+    _setupCardView = [[UIView alloc] initWithFrame:CGRectMake((w - cardW)/2.0f, (h - cardH)/2.0f, cardW, cardH)];
     _setupCardView.backgroundColor = [UIColor colorWithRed:0.05f green:0.06f blue:0.10f alpha:0.96f];
-    _setupCardView.layer.cornerRadius = 20.0f;
+    _setupCardView.layer.cornerRadius = 18.0f;
     _setupCardView.layer.borderWidth = 1.5f;
     _setupCardView.layer.borderColor = [UIColor colorWithRed:0.0f green:0.85f blue:1.0f alpha:0.85f].CGColor;
     _setupCardView.layer.shadowColor = [UIColor colorWithRed:0.0f green:0.85f blue:1.0f alpha:0.5f].CGColor;
@@ -352,21 +369,21 @@ extern "C" {
     _setupCardView.layer.shadowOpacity = 0.6f;
     
     // Header Title
-    UILabel *titleLbl = [[UILabel alloc] initWithFrame:CGRectMake(20, 14, cardW - 40, 24)];
-    titleLbl.text = @"TEKKEN 6 (XBOX 360)";
+    UILabel *titleLbl = [[UILabel alloc] initWithFrame:CGRectMake(20, 12, cardW - 40, 22)];
+    titleLbl.text = @"TEKKEN 6 NATIVE HOST LOADER";
     titleLbl.textColor = [UIColor whiteColor];
-    titleLbl.font = [UIFont boldSystemFontOfSize:17.0f];
+    titleLbl.font = [UIFont boldSystemFontOfSize:16.0f];
     titleLbl.textAlignment = NSTextAlignmentCenter;
     [_setupCardView addSubview:titleLbl];
     
     // Status Badge
-    UILabel *badge = [[UILabel alloc] initWithFrame:CGRectMake((cardW - 240)/2.0f, 42, 240, 22)];
+    UILabel *badge = [[UILabel alloc] initWithFrame:CGRectMake((cardW - 250)/2.0f, 38, 250, 20)];
     badge.text = @"GAME VERIFIED: 4E4D07E6";
     badge.textColor = [UIColor colorWithRed:0.0f green:1.0f blue:0.5f alpha:1.0f];
-    badge.font = [UIFont boldSystemFontOfSize:11.0f];
+    badge.font = [UIFont boldSystemFontOfSize:10.5f];
     badge.textAlignment = NSTextAlignmentCenter;
     badge.backgroundColor = [[UIColor colorWithRed:0.0f green:1.0f blue:0.5f alpha:0.2f] colorWithAlphaComponent:0.15f];
-    badge.layer.cornerRadius = 11.0f;
+    badge.layer.cornerRadius = 10.0f;
     badge.layer.masksToBounds = YES;
     [_setupCardView addSubview:badge];
     
@@ -375,43 +392,50 @@ extern "C" {
     NSDictionary *attrs = [fm attributesOfItemAtPath:_detectedGamePath error:nil];
     double mb = (double)[attrs fileSize] / (1024.0 * 1024.0);
     
-    UILabel *infoLbl = [[UILabel alloc] initWithFrame:CGRectMake(24, 72, cardW - 48, 140)];
-    infoLbl.numberOfLines = 6;
+    UILabel *infoLbl = [[UILabel alloc] initWithFrame:CGRectMake(20, 64, cardW - 40, 145)];
+    infoLbl.numberOfLines = 7;
     infoLbl.textColor = [UIColor colorWithWhite:0.88f alpha:1.0f];
-    infoLbl.font = [UIFont systemFontOfSize:12.5f weight:UIFontWeightRegular];
+    infoLbl.font = [UIFont systemFontOfSize:11.5f weight:UIFontWeightRegular];
+    
+    NSString *assetWarning = @"";
+    if (_detectedAssets.count == 0) {
+        assetWarning = @"\n⚠️ NOTICE: 0 asset folders found in game/! Copy game data folders (sound, motion, stage, ui, character) from your dump.";
+    } else {
+        assetWarning = [NSString stringWithFormat:@"\n• Assets: %lu directories discovered", (unsigned long)_detectedAssets.count];
+    }
     
 #if TEKKEN6_WITH_GAME
     infoLbl.text = [NSString stringWithFormat:@"• Executable: %@ (%.2f MB)\n"
-                                             @"• Recompiled Guest Engine: ACTIVE (ARM64 Native)\n"
+                                             @"• Recompiled Guest Engine: ACTIVE (ARM64 Native)%@\n"
                                              @"• Metal Viewport: BGRA8Unorm Triple-Buffered\n"
                                              @"• ProMotion: %s Locked\n\n"
-                                             @"Touch controls and Bluetooth controllers are ready!",
-                                             _detectedGamePath.lastPathComponent, mb,
+                                             @"Starting native combat execution...",
+                                             _detectedGamePath.lastPathComponent, mb, assetWarning,
                                              _proMotionEnabled ? "120Hz" : "60Hz"];
 #else
-    infoLbl.text = [NSString stringWithFormat:@"• Executable: %@ (%.2f MB)\n"
+    infoLbl.text = [NSString stringWithFormat:@"• Executable: %@ (%.2f MB)%@\n"
                                              @"• Engine Mode: Host Diagnostic & Probe Harness\n"
-                                             @"• ProMotion: %s | Metal: 120 FPS Active Viewport\n"
-                                             @"• Recompiled Guest Code: Not embedded in this IPA\n\n"
-                                             @"Tap 'Enter Viewport' to test controls and 120Hz rendering, or tap 'View Logs' for runtime diagnostics.",
-                                             _detectedGamePath.lastPathComponent, mb,
+                                             @"• ProMotion: %s | Metal: 120 FPS Active Viewport\n\n"
+                                             @"To build full game with embedded translated code, run GitHub Actions with your default.xex download URL (xex_url).\n"
+                                             @"Tap 'Enter Viewport' below to test overhauled controls at 120Hz!",
+                                             _detectedGamePath.lastPathComponent, mb, assetWarning,
                                              _proMotionEnabled ? "120Hz" : "60Hz"];
 #endif
     [_setupCardView addSubview:infoLbl];
     
     // Action Buttons
-    CGFloat btnW = (cardW - 58.0f) / 3.0f;
-    CGFloat btnH = 42.0f;
-    CGFloat btnY = cardH - 58.0f;
+    CGFloat btnW = (cardW - 54.0f) / 3.0f;
+    CGFloat btnH = 38.0f;
+    CGFloat btnY = cardH - 50.0f;
     
     // 1. Enter Viewport
     UIButton *btnEnter = [UIButton buttonWithType:UIButtonTypeCustom];
-    btnEnter.frame = CGRectMake(20, btnY, btnW, btnH);
+    btnEnter.frame = CGRectMake(18, btnY, btnW, btnH);
     btnEnter.backgroundColor = [UIColor colorWithRed:0.0f green:0.80f blue:1.0f alpha:0.95f];
-    btnEnter.layer.cornerRadius = 12.0f;
+    btnEnter.layer.cornerRadius = 10.0f;
     [btnEnter setTitle:@"Enter Viewport" forState:UIControlStateNormal];
     [btnEnter setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
-    btnEnter.titleLabel.font = [UIFont boldSystemFontOfSize:12.0f];
+    btnEnter.titleLabel.font = [UIFont boldSystemFontOfSize:11.5f];
     [btnEnter addTarget:self action:@selector(dismissDashboardCard) forControlEvents:UIControlEventTouchUpInside];
     [_setupCardView addSubview:btnEnter];
     
@@ -419,12 +443,12 @@ extern "C" {
     UIButton *btnLogs = [UIButton buttonWithType:UIButtonTypeCustom];
     btnLogs.frame = CGRectMake(CGRectGetMaxX(btnEnter.frame) + 9, btnY, btnW, btnH);
     btnLogs.backgroundColor = [UIColor colorWithRed:0.14f green:0.16f blue:0.24f alpha:0.95f];
-    btnLogs.layer.cornerRadius = 12.0f;
+    btnLogs.layer.cornerRadius = 10.0f;
     btnLogs.layer.borderWidth = 1.0f;
     btnLogs.layer.borderColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.6f].CGColor;
     [btnLogs setTitle:@"View Logs" forState:UIControlStateNormal];
     [btnLogs setTitleColor:[UIColor colorWithRed:0.0f green:0.85f blue:1.0f alpha:1.0f] forState:UIControlStateNormal];
-    btnLogs.titleLabel.font = [UIFont boldSystemFontOfSize:12.0f];
+    btnLogs.titleLabel.font = [UIFont boldSystemFontOfSize:11.5f];
     [btnLogs addTarget:self action:@selector(openLogsFromDashboard) forControlEvents:UIControlEventTouchUpInside];
     [_setupCardView addSubview:btnLogs];
     
@@ -432,16 +456,17 @@ extern "C" {
     UIButton *btnRescan = [UIButton buttonWithType:UIButtonTypeCustom];
     btnRescan.frame = CGRectMake(CGRectGetMaxX(btnLogs.frame) + 9, btnY, btnW, btnH);
     btnRescan.backgroundColor = [UIColor colorWithRed:0.14f green:0.16f blue:0.24f alpha:0.95f];
-    btnRescan.layer.cornerRadius = 12.0f;
+    btnRescan.layer.cornerRadius = 10.0f;
     btnRescan.layer.borderWidth = 1.0f;
     btnRescan.layer.borderColor = [UIColor colorWithWhite:0.4f alpha:0.8f].CGColor;
     [btnRescan setTitle:@"Re-Scan" forState:UIControlStateNormal];
     [btnRescan setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    btnRescan.titleLabel.font = [UIFont boldSystemFontOfSize:12.0f];
+    btnRescan.titleLabel.font = [UIFont boldSystemFontOfSize:11.5f];
     [btnRescan addTarget:self action:@selector(rescanButtonTapped) forControlEvents:UIControlEventTouchUpInside];
     [_setupCardView addSubview:btnRescan];
     
     [self.view addSubview:_setupCardView];
+    [self.view bringSubviewToFront:_setupCardView];
 }
 
 - (void)dismissDashboardCard {
@@ -561,13 +586,17 @@ extern "C" {
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     
+    CGFloat w = self.view.bounds.size.width;
+    CGFloat h = self.view.bounds.size.height;
+    
     CGRect viewport = [self calculateViewportFrame];
     _metalLayer.frame = viewport;
     _metalLayer.drawableSize = CGSizeMake(viewport.size.width * [UIScreen mainScreen].nativeScale,
                                          viewport.size.height * [UIScreen mainScreen].nativeScale);
     
     if (_setupCardView) {
-        _setupCardView.center = CGPointMake(self.view.bounds.size.width / 2.0f, self.view.bounds.size.height / 2.0f);
+        _setupCardView.center = CGPointMake(w / 2.0f, h / 2.0f);
+        [self.view bringSubviewToFront:_setupCardView];
     }
 }
 

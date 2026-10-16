@@ -80,7 +80,7 @@
         _layoutSize = TouchLayoutSizeNormal;
         _currentButtons = 0;
         _dpadButtons = 0;
-        _dpadRadius = 70.0f;
+        _dpadRadius = 68.0f;
         _isLogsDrawerOpen = NO;
         
         _opacityLevels = @[@1.0f, @0.75f, @0.50f, @0.25f];
@@ -121,7 +121,7 @@
     NSString *fullText = [NSString stringWithFormat:@"%@\n%@  %@", title, sub, xbox];
     NSMutableAttributedString *attr = [[NSMutableAttributedString alloc] initWithString:fullText];
     
-    [attr addAttribute:NSFontAttributeName value:[UIFont boldSystemFontOfSize:15.0f] range:NSMakeRange(0, title.length)];
+    [attr addAttribute:NSFontAttributeName value:[UIFont boldSystemFontOfSize:14.0f] range:NSMakeRange(0, title.length)];
     [attr addAttribute:NSForegroundColorAttributeName value:[UIColor whiteColor] range:NSMakeRange(0, title.length)];
     
     NSInteger subStart = title.length + 1;
@@ -130,18 +130,18 @@
     
     NSInteger xboxStart = subStart + sub.length + 2;
     [attr addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:9.0f weight:UIFontWeightRegular] range:NSMakeRange(xboxStart, xbox.length)];
-    [attr addAttribute:NSForegroundColorAttributeName value:[UIColor colorWithWhite:0.7f alpha:0.8f] range:NSMakeRange(xboxStart, xbox.length)];
+    [attr addAttribute:NSForegroundColorAttributeName value:[UIColor colorWithWhite:0.75f alpha:0.8f] range:NSMakeRange(xboxStart, xbox.length)];
     
     btn.titleLabel.numberOfLines = 2;
     btn.titleLabel.textAlignment = NSTextAlignmentCenter;
     [btn setAttributedTitle:attr forState:UIControlStateNormal];
     
-    btn.backgroundColor = [UIColor colorWithRed:0.07f green:0.08f blue:0.12f alpha:0.82f];
-    btn.layer.borderWidth = 2.5f;
+    btn.backgroundColor = [UIColor colorWithRed:0.07f green:0.08f blue:0.12f alpha:0.85f];
+    btn.layer.borderWidth = 2.0f;
     btn.layer.borderColor = color.CGColor;
     btn.layer.shadowColor = color.CGColor;
-    btn.layer.shadowOpacity = 0.7f;
-    btn.layer.shadowRadius = 10.0f;
+    btn.layer.shadowOpacity = 0.6f;
+    btn.layer.shadowRadius = 8.0f;
     btn.layer.shadowOffset = CGSizeZero;
     
     [btn addTarget:self action:@selector(buttonDown:) forControlEvents:UIControlEventTouchDown];
@@ -156,14 +156,14 @@
     btn.tag = tag;
     [btn setTitle:title forState:UIControlStateNormal];
     [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    btn.titleLabel.font = [UIFont boldSystemFontOfSize:12.0f];
-    btn.backgroundColor = [UIColor colorWithRed:0.10f green:0.11f blue:0.16f alpha:0.82f];
-    btn.layer.cornerRadius = 14.0f;
+    btn.titleLabel.font = [UIFont boldSystemFontOfSize:11.0f];
+    btn.backgroundColor = [UIColor colorWithRed:0.10f green:0.11f blue:0.16f alpha:0.85f];
+    btn.layer.cornerRadius = 12.0f;
     btn.layer.borderWidth = 1.5f;
     btn.layer.borderColor = color.CGColor;
     btn.layer.shadowColor = color.CGColor;
     btn.layer.shadowOpacity = 0.5f;
-    btn.layer.shadowRadius = 6.0f;
+    btn.layer.shadowRadius = 5.0f;
     btn.layer.shadowOffset = CGSizeZero;
     
     [btn addTarget:self action:@selector(buttonDown:) forControlEvents:UIControlEventTouchDown];
@@ -177,9 +177,9 @@
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
     [btn setTitle:title forState:UIControlStateNormal];
     [btn setTitleColor:[UIColor colorWithWhite:0.92f alpha:1.0f] forState:UIControlStateNormal];
-    btn.titleLabel.font = [UIFont boldSystemFontOfSize:11.0f];
-    btn.backgroundColor = [UIColor colorWithRed:0.08f green:0.09f blue:0.14f alpha:0.85f];
-    btn.layer.cornerRadius = 12.0f;
+    btn.titleLabel.font = [UIFont boldSystemFontOfSize:10.5f];
+    btn.backgroundColor = [UIColor colorWithRed:0.08f green:0.09f blue:0.14f alpha:0.88f];
+    btn.layer.cornerRadius = 11.0f;
     btn.layer.borderWidth = 1.0f;
     btn.layer.borderColor = [UIColor colorWithWhite:0.35f alpha:0.7f].CGColor;
     [btn addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
@@ -192,16 +192,13 @@
 - (void)setupControls {
     // 1. 8-Way D-Pad Base
     _dpadBase = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _dpadRadius * 2, _dpadRadius * 2)];
-    _dpadBase.backgroundColor = [UIColor colorWithRed:0.06f green:0.08f blue:0.12f alpha:0.80f];
+    _dpadBase.backgroundColor = [UIColor colorWithRed:0.06f green:0.08f blue:0.12f alpha:0.82f];
     _dpadBase.layer.cornerRadius = _dpadRadius;
     _dpadBase.layer.borderWidth = 2.0f;
     _dpadBase.layer.borderColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.6f].CGColor;
-    _dpadBase.layer.shadowColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.5f].CGColor;
-    _dpadBase.layer.shadowRadius = 8.0f;
-    _dpadBase.layer.shadowOpacity = 0.5f;
     _dpadBase.userInteractionEnabled = NO;
     
-    // Cardinal & Diagonal Direction Indicators
+    // Direction Indicators
     _lblUp = [self createDirectionLabel:@"▲"];
     _lblDown = [self createDirectionLabel:@"▼"];
     _lblLeft = [self createDirectionLabel:@"◀"];
@@ -221,21 +218,17 @@
     [_dpadBase addSubview:_lblUpLeft];
     
     // Center Thumb Knob
-    _dpadKnob = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 48.0f, 48.0f)];
-    _dpadKnob.backgroundColor = [UIColor colorWithRed:0.25f green:0.28f blue:0.38f alpha:0.90f];
-    _dpadKnob.layer.cornerRadius = 24.0f;
-    _dpadKnob.layer.borderWidth = 2.0f;
+    _dpadKnob = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 44.0f, 44.0f)];
+    _dpadKnob.backgroundColor = [UIColor colorWithRed:0.25f green:0.28f blue:0.38f alpha:0.92f];
+    _dpadKnob.layer.cornerRadius = 22.0f;
+    _dpadKnob.layer.borderWidth = 1.5f;
     _dpadKnob.layer.borderColor = [UIColor colorWithRed:0.0f green:0.9f blue:1.0f alpha:0.9f].CGColor;
-    _dpadKnob.layer.shadowColor = [UIColor colorWithRed:0.0f green:0.9f blue:1.0f alpha:0.6f].CGColor;
-    _dpadKnob.layer.shadowRadius = 6.0f;
-    _dpadKnob.layer.shadowOpacity = 0.8f;
     _dpadKnob.userInteractionEnabled = NO;
     [_dpadBase addSubview:_dpadKnob];
     
     [self addSubview:_dpadBase];
     
     // 2. Authentic Arcade 2x2 Slanted Fight Matrix
-    // LP (1 - Cyan), RP (2 - Yellow), LK (3 - Green), RK (4 - Red)
     UIColor *colorLP = [UIColor colorWithRed:0.0f green:0.90f blue:1.0f alpha:1.0f];  // Cyan Punch 1
     UIColor *colorRP = [UIColor colorWithRed:1.0f green:0.84f blue:0.0f alpha:1.0f];  // Amber Punch 2
     UIColor *colorLK = [UIColor colorWithRed:0.0f green:0.92f blue:0.46f alpha:1.0f]; // Emerald Kick 3
@@ -261,8 +254,9 @@
     _btnAspect = [self createSystemButtonWithTitle:@"16:9" action:@selector(toggleAspectTapped)];
     _btnSize = [self createSystemButtonWithTitle:@"SIZE" action:@selector(toggleSizeTapped)];
     _btnOpacity = [self createSystemButtonWithTitle:@"100%" action:@selector(toggleOpacityTapped)];
+    
     _btnLogs = [self createSystemButtonWithTitle:@"[LOGS]" action:@selector(toggleLogsDrawer)];
-    _btnLogs.layer.borderColor = [UIColor colorWithRed:0.0f green:0.85f blue:1.0f alpha:0.8f].CGColor;
+    _btnLogs.layer.borderColor = [UIColor colorWithRed:0.0f green:0.85f blue:1.0f alpha:0.85f].CGColor;
     _btnLogs.layer.borderWidth = 1.5f;
     [_btnLogs setTitleColor:[UIColor colorWithRed:0.0f green:0.85f blue:1.0f alpha:1.0f] forState:UIControlStateNormal];
     
@@ -276,7 +270,7 @@
     UILabel *lbl = [[UILabel alloc] init];
     lbl.text = text;
     lbl.textColor = [UIColor colorWithWhite:0.6f alpha:0.6f];
-    lbl.font = [UIFont boldSystemFontOfSize:11.0f];
+    lbl.font = [UIFont boldSystemFontOfSize:10.0f];
     lbl.textAlignment = NSTextAlignmentCenter;
     return lbl;
 }
@@ -286,89 +280,85 @@
 - (void)setupLogsDrawer {
     CGFloat w = self.bounds.size.width;
     CGFloat h = self.bounds.size.height;
-    CGFloat drawerW = MIN(w - 32.0f, 680.0f);
-    CGFloat drawerH = MIN(h - 80.0f, 320.0f);
+    CGFloat drawerW = MIN(w - 24.0f, 660.0f);
+    CGFloat drawerH = MIN(h - 50.0f, 300.0f);
     
-    _logDrawerView = [[UIView alloc] initWithFrame:CGRectMake((w - drawerW)/2.0f, -drawerH - 20.0f, drawerW, drawerH)];
+    _logDrawerView = [[UIView alloc] initWithFrame:CGRectMake((w - drawerW)/2.0f, -drawerH - 30.0f, drawerW, drawerH)];
     _logDrawerView.backgroundColor = [UIColor colorWithRed:0.05f green:0.06f blue:0.09f alpha:0.96f];
     _logDrawerView.layer.cornerRadius = 16.0f;
     _logDrawerView.layer.borderWidth = 1.5f;
     _logDrawerView.layer.borderColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.8f].CGColor;
-    _logDrawerView.layer.shadowColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.6f].CGColor;
-    _logDrawerView.layer.shadowRadius = 14.0f;
-    _logDrawerView.layer.shadowOpacity = 0.6f;
-    _logDrawerView.layer.shadowOffset = CGSizeZero;
     _logDrawerView.clipsToBounds = YES;
     
     // Header Bar
-    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, drawerW, 40)];
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, drawerW, 38)];
     header.backgroundColor = [UIColor colorWithRed:0.08f green:0.10f blue:0.16f alpha:1.0f];
     [_logDrawerView addSubview:header];
     
-    _logTitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(16, 8, 220, 24)];
-    _logTitleLabel.text = @"TEKKEN 6 RUNTIME LOGS";
+    _logTitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(14, 8, 200, 22)];
+    _logTitleLabel.text = @"TEKKEN 6 LOG CONSOLE";
     _logTitleLabel.textColor = [UIColor whiteColor];
-    _logTitleLabel.font = [UIFont boldSystemFontOfSize:12.0f];
+    _logTitleLabel.font = [UIFont boldSystemFontOfSize:11.5f];
     [header addSubview:_logTitleLabel];
     
-    _logStatusBadge = [[UILabel alloc] initWithFrame:CGRectMake(240, 10, 110, 20)];
+    _logStatusBadge = [[UILabel alloc] initWithFrame:CGRectMake(220, 9, 100, 20)];
     _logStatusBadge.text = @"ACTIVE";
     _logStatusBadge.textColor = [UIColor colorWithRed:0.0f green:1.0f blue:0.5f alpha:1.0f];
-    _logStatusBadge.font = [UIFont boldSystemFontOfSize:10.0f];
+    _logStatusBadge.font = [UIFont boldSystemFontOfSize:9.5f];
     _logStatusBadge.textAlignment = NSTextAlignmentCenter;
     _logStatusBadge.backgroundColor = [[UIColor colorWithRed:0.0f green:1.0f blue:0.5f alpha:0.15f] colorWithAlphaComponent:0.15f];
     _logStatusBadge.layer.cornerRadius = 8.0f;
     _logStatusBadge.layer.masksToBounds = YES;
     [header addSubview:_logStatusBadge];
     
-    CGFloat btnW = 55.0f;
-    CGFloat btnH = 26.0f;
-    CGFloat curX = drawerW - 12.0f - btnW;
+    CGFloat btnW = 50.0f;
+    CGFloat btnH = 24.0f;
+    CGFloat curX = drawerW - 10.0f - btnW;
     
     _btnCloseLogs = [UIButton buttonWithType:UIButtonTypeCustom];
     _btnCloseLogs.frame = CGRectMake(curX, 7, btnW, btnH);
-    _btnCloseLogs.backgroundColor = [UIColor colorWithRed:0.8f green:0.1f blue:0.2f alpha:0.8f];
-    _btnCloseLogs.layer.cornerRadius = 8.0f;
+    _btnCloseLogs.backgroundColor = [UIColor colorWithRed:0.8f green:0.1f blue:0.2f alpha:0.85f];
+    _btnCloseLogs.layer.cornerRadius = 7.0f;
     [_btnCloseLogs setTitle:@"CLOSE" forState:UIControlStateNormal];
-    _btnCloseLogs.titleLabel.font = [UIFont boldSystemFontOfSize:10.0f];
+    _btnCloseLogs.titleLabel.font = [UIFont boldSystemFontOfSize:9.5f];
     [_btnCloseLogs addTarget:self action:@selector(toggleLogsDrawer) forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:_btnCloseLogs];
     
     curX -= (btnW + 6.0f);
     _btnCopyLogs = [UIButton buttonWithType:UIButtonTypeCustom];
     _btnCopyLogs.frame = CGRectMake(curX, 7, btnW, btnH);
-    _btnCopyLogs.backgroundColor = [UIColor colorWithRed:0.15f green:0.18f blue:0.25f alpha:0.8f];
-    _btnCopyLogs.layer.cornerRadius = 8.0f;
+    _btnCopyLogs.backgroundColor = [UIColor colorWithRed:0.15f green:0.18f blue:0.25f alpha:0.85f];
+    _btnCopyLogs.layer.cornerRadius = 7.0f;
     [_btnCopyLogs setTitle:@"COPY" forState:UIControlStateNormal];
-    _btnCopyLogs.titleLabel.font = [UIFont boldSystemFontOfSize:10.0f];
+    _btnCopyLogs.titleLabel.font = [UIFont boldSystemFontOfSize:9.5f];
     [_btnCopyLogs addTarget:self action:@selector(copyLogsTapped) forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:_btnCopyLogs];
     
     curX -= (btnW + 6.0f);
     _btnClearLogs = [UIButton buttonWithType:UIButtonTypeCustom];
     _btnClearLogs.frame = CGRectMake(curX, 7, btnW, btnH);
-    _btnClearLogs.backgroundColor = [UIColor colorWithRed:0.15f green:0.18f blue:0.25f alpha:0.8f];
-    _btnClearLogs.layer.cornerRadius = 8.0f;
+    _btnClearLogs.backgroundColor = [UIColor colorWithRed:0.15f green:0.18f blue:0.25f alpha:0.85f];
+    _btnClearLogs.layer.cornerRadius = 7.0f;
     [_btnClearLogs setTitle:@"CLEAR" forState:UIControlStateNormal];
-    _btnClearLogs.titleLabel.font = [UIFont boldSystemFontOfSize:10.0f];
+    _btnClearLogs.titleLabel.font = [UIFont boldSystemFontOfSize:9.5f];
     [_btnClearLogs addTarget:self action:@selector(clearLogsTapped) forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:_btnClearLogs];
     
     curX -= (btnW + 6.0f);
     _btnRefreshLogs = [UIButton buttonWithType:UIButtonTypeCustom];
     _btnRefreshLogs.frame = CGRectMake(curX, 7, btnW, btnH);
-    _btnRefreshLogs.backgroundColor = [UIColor colorWithRed:0.0f green:0.6f blue:0.8f alpha:0.8f];
-    _btnRefreshLogs.layer.cornerRadius = 8.0f;
+    _btnRefreshLogs.backgroundColor = [UIColor colorWithRed:0.0f green:0.6f blue:0.8f alpha:0.85f];
+    _btnRefreshLogs.layer.cornerRadius = 7.0f;
     [_btnRefreshLogs setTitle:@"RELOAD" forState:UIControlStateNormal];
-    _btnRefreshLogs.titleLabel.font = [UIFont boldSystemFontOfSize:10.0f];
+    _btnRefreshLogs.titleLabel.font = [UIFont boldSystemFontOfSize:9.5f];
     [_btnRefreshLogs addTarget:self action:@selector(refreshLogsTapped) forControlEvents:UIControlEventTouchUpInside];
     [header addSubview:_btnRefreshLogs];
     
     // Log TextView
-    _logTextView = [[UITextView alloc] initWithFrame:CGRectMake(12, 46, drawerW - 24, drawerH - 54)];
+    _logTextView = [[UITextView alloc] initWithFrame:CGRectMake(10, 42, drawerW - 20, drawerH - 48)];
     _logTextView.backgroundColor = [UIColor clearColor];
     _logTextView.textColor = [UIColor colorWithRed:0.2f green:0.95f blue:0.5f alpha:1.0f];
-    _logTextView.font = [UIFont fontWithName:@"Courier" size:11.0f] ?: [UIFont monospacedSystemFontOfSize:11.0f weight:UIFontWeightRegular];
+    _logTextView.font = [UIFont fontWithName:@"Courier" size:10.5f] ?: [UIFont monospacedSystemFontOfSize:10.5f weight:UIFontWeightRegular];
     _logTextView.editable = NO;
     _logTextView.indicatorStyle = UIScrollViewIndicatorStyleWhite;
     [_logDrawerView addSubview:_logTextView];
@@ -395,7 +385,7 @@
         insets = self.safeAreaInsets;
     }
     
-    CGFloat targetY = show ? (MAX(insets.top, 16.0f) + 40.0f) : (-drawerH - 30.0f);
+    CGFloat targetY = show ? (MAX(insets.top, 14.0f) + 38.0f) : (-drawerH - 30.0f);
     
     if (show) {
         [self refreshLogsContent];
@@ -403,7 +393,7 @@
     
     [UIView animateWithDuration:0.35 delay:0 usingSpringWithDamping:0.85 initialSpringVelocity:0.5 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         self->_logDrawerView.frame = CGRectMake((w - drawerW)/2.0f, targetY, drawerW, drawerH);
-        self->_btnLogs.backgroundColor = show ? [UIColor colorWithRed:0.0f green:0.75f blue:1.0f alpha:0.9f] : [UIColor colorWithRed:0.08f green:0.09f blue:0.14f alpha:0.85f];
+        self->_btnLogs.backgroundColor = show ? [UIColor colorWithRed:0.0f green:0.75f blue:1.0f alpha:0.9f] : [UIColor colorWithRed:0.08f green:0.09f blue:0.14f alpha:0.88f];
         [self->_btnLogs setTitleColor:show ? [UIColor blackColor] : [UIColor colorWithRed:0.0f green:0.85f blue:1.0f alpha:1.0f] forState:UIControlStateNormal];
     } completion:nil];
 }
@@ -463,7 +453,7 @@
     _logStatusBadge.backgroundColor = [color colorWithAlphaComponent:0.15f];
 }
 
-#pragma mark - Layout Calculations (Arcade Slanted 2x2 Matrix)
+#pragma mark - Responsive Adaptive Layout (Prevents Any Overlap)
 
 - (void)updateControlLayout {
     CGFloat w = self.bounds.size.width;
@@ -475,99 +465,100 @@
         insets = self.safeAreaInsets;
     }
     
+    // Scale factor based on standard landscape resolution (852 x 393)
+    CGFloat scale = MIN(w / 852.0f, h / 393.0f);
+    scale = MAX(0.68f, MIN(scale, 1.25f));
+    
     // Top Bar (Safely under notch/island)
-    CGFloat topY = MAX(insets.top, 12.0f);
-    CGFloat sysBtnW = 54.0f;
-    CGFloat sysBtnH = 26.0f;
-    CGFloat sysSpacing = 6.0f;
+    CGFloat topY = MAX(insets.top, 10.0f);
+    CGFloat sysBtnW = 50.0f * scale;
+    CGFloat sysBtnH = 25.0f;
+    CGFloat sysSpacing = 5.0f;
+    
+    // Left cluster: [LOGS] and SIZE
+    CGFloat leftX = MAX(insets.left, 14.0f);
+    _btnLogs.frame = CGRectMake(leftX, topY, sysBtnW + 6.0f, sysBtnH);
+    _btnSize.frame = CGRectMake(CGRectGetMaxX(_btnLogs.frame) + sysSpacing, topY, sysBtnW, sysBtnH);
     
     // Center cluster: SELECT & START
     CGFloat centerX = w / 2.0f;
     _btnBack.frame = CGRectMake(centerX - sysBtnW - sysSpacing/2.0f, topY, sysBtnW, sysBtnH);
     _btnStart.frame = CGRectMake(centerX + sysSpacing/2.0f, topY, sysBtnW, sysBtnH);
     
-    // Right cluster: 120Hz, 16:9, SIZE, OPAC, [LOGS], HIDE
+    // Right cluster: 120Hz, 16:9, OPAC, HIDE
     CGFloat rightX = w - MAX(insets.right, 14.0f);
     _btnToggleControls.frame = CGRectMake(rightX - sysBtnW, topY, sysBtnW, sysBtnH);
-    _btnLogs.frame = CGRectMake(rightX - sysBtnW * 2.0f - sysSpacing, topY, sysBtnW + 4.0f, sysBtnH);
-    _btnOpacity.frame = CGRectMake(rightX - sysBtnW * 3.0f - sysSpacing * 2.0f - 4.0f, topY, sysBtnW, sysBtnH);
-    _btnSize.frame = CGRectMake(rightX - sysBtnW * 4.0f - sysSpacing * 3.0f - 4.0f, topY, sysBtnW, sysBtnH);
-    _btnAspect.frame = CGRectMake(rightX - sysBtnW * 5.0f - sysSpacing * 4.0f - 4.0f, topY, sysBtnW, sysBtnH);
-    _btnProMotion.frame = CGRectMake(rightX - sysBtnW * 6.0f - sysSpacing * 5.0f - 4.0f, topY, sysBtnW, sysBtnH);
+    _btnOpacity.frame = CGRectMake(rightX - sysBtnW * 2.0f - sysSpacing, topY, sysBtnW, sysBtnH);
+    _btnAspect.frame = CGRectMake(rightX - sysBtnW * 3.0f - sysSpacing * 2.0f, topY, sysBtnW, sysBtnH);
+    _btnProMotion.frame = CGRectMake(rightX - sysBtnW * 4.0f - sysSpacing * 3.0f, topY, sysBtnW, sysBtnH);
     
     // Scaling adjustments according to layout size preset
-    CGFloat btnSize = 66.0f;
-    CGFloat spacingX = 72.0f;
-    CGFloat spacingY = 70.0f;
-    CGFloat macroW = 48.0f;
-    CGFloat macroH = 32.0f;
-    
+    CGFloat sizeMultiplier = 1.0f;
     switch (_layoutSize) {
         case TouchLayoutSizeLarge:
-            btnSize = 76.0f;
-            spacingX = 82.0f;
-            spacingY = 80.0f;
-            _dpadRadius = 82.0f;
-            macroW = 54.0f;
-            macroH = 36.0f;
+            sizeMultiplier = 1.15f;
             break;
         case TouchLayoutSizeCompact:
-            btnSize = 56.0f;
-            spacingX = 62.0f;
-            spacingY = 60.0f;
-            _dpadRadius = 60.0f;
-            macroW = 42.0f;
-            macroH = 28.0f;
+            sizeMultiplier = 0.85f;
             break;
         case TouchLayoutSizeNormal:
         default:
-            btnSize = 66.0f;
-            spacingX = 72.0f;
-            spacingY = 70.0f;
-            _dpadRadius = 70.0f;
-            macroW = 48.0f;
-            macroH = 32.0f;
+            sizeMultiplier = 1.0f;
             break;
     }
     
+    CGFloat effectiveScale = scale * sizeMultiplier;
+    CGFloat btnSize = 64.0f * effectiveScale;
+    CGFloat spacingX = 72.0f * effectiveScale;
+    CGFloat spacingY = 68.0f * effectiveScale;
+    CGFloat macroW = 46.0f * effectiveScale;
+    CGFloat macroH = 30.0f * effectiveScale;
+    _dpadRadius = 66.0f * effectiveScale;
+    
     // Left D-Pad positioning
-    CGFloat dpadMarginLeft = MAX(insets.left + 45.0f, 110.0f);
-    CGFloat dpadMarginBottom = MAX(insets.bottom + 50.0f, 95.0f);
-    _dpadCenter = CGPointMake(dpadMarginLeft, h - dpadMarginBottom);
+    CGFloat dpadMarginLeft = MAX(insets.left + 35.0f * scale, 85.0f * scale);
+    CGFloat dpadMarginBottom = MAX(insets.bottom + 40.0f * scale, 75.0f * scale);
+    _dpadCenter = CGPointMake(dpadMarginLeft + _dpadRadius, h - dpadMarginBottom);
     
     _dpadBase.frame = CGRectMake(0, 0, _dpadRadius * 2, _dpadRadius * 2);
     _dpadBase.center = _dpadCenter;
     _dpadBase.layer.cornerRadius = _dpadRadius;
     
+    CGFloat knobSize = 44.0f * effectiveScale;
+    _dpadKnob.frame = CGRectMake(0, 0, knobSize, knobSize);
+    _dpadKnob.layer.cornerRadius = knobSize / 2.0f;
     _dpadKnob.center = CGPointMake(_dpadRadius, _dpadRadius);
     
     // Direction indicators placement
-    CGFloat padOffset = 14.0f;
-    _lblUp.frame = CGRectMake(_dpadRadius - 12.0f, padOffset, 24.0f, 20.0f);
-    _lblDown.frame = CGRectMake(_dpadRadius - 12.0f, _dpadRadius * 2 - padOffset - 20.0f, 24.0f, 20.0f);
-    _lblLeft.frame = CGRectMake(padOffset, _dpadRadius - 10.0f, 20.0f, 20.0f);
-    _lblRight.frame = CGRectMake(_dpadRadius * 2 - padOffset - 20.0f, _dpadRadius - 10.0f, 20.0f, 20.0f);
+    CGFloat padOffset = 12.0f * effectiveScale;
+    _lblUp.frame = CGRectMake(_dpadRadius - 12.0f, padOffset, 24.0f, 18.0f);
+    _lblDown.frame = CGRectMake(_dpadRadius - 12.0f, _dpadRadius * 2 - padOffset - 18.0f, 24.0f, 18.0f);
+    _lblLeft.frame = CGRectMake(padOffset, _dpadRadius - 9.0f, 18.0f, 18.0f);
+    _lblRight.frame = CGRectMake(_dpadRadius * 2 - padOffset - 18.0f, _dpadRadius - 9.0f, 18.0f, 18.0f);
     
-    CGFloat diagOffset = _dpadRadius * 0.32f;
-    _lblUpLeft.frame = CGRectMake(_dpadRadius - diagOffset - 10.0f, _dpadRadius - diagOffset - 10.0f, 20.0f, 20.0f);
-    _lblUpRight.frame = CGRectMake(_dpadRadius + diagOffset - 10.0f, _dpadRadius - diagOffset - 10.0f, 20.0f, 20.0f);
-    _lblDownLeft.frame = CGRectMake(_dpadRadius - diagOffset - 10.0f, _dpadRadius + diagOffset - 10.0f, 20.0f, 20.0f);
-    _lblDownRight.frame = CGRectMake(_dpadRadius + diagOffset - 10.0f, _dpadRadius + diagOffset - 10.0f, 20.0f, 20.0f);
+    CGFloat diagOffset = _dpadRadius * 0.30f;
+    _lblUpLeft.frame = CGRectMake(_dpadRadius - diagOffset - 9.0f, _dpadRadius - diagOffset - 9.0f, 18.0f, 18.0f);
+    _lblUpRight.frame = CGRectMake(_dpadRadius + diagOffset - 9.0f, _dpadRadius - diagOffset - 9.0f, 18.0f, 18.0f);
+    _lblDownLeft.frame = CGRectMake(_dpadRadius - diagOffset - 9.0f, _dpadRadius + diagOffset - 9.0f, 18.0f, 18.0f);
+    _lblDownRight.frame = CGRectMake(_dpadRadius + diagOffset - 9.0f, _dpadRadius + diagOffset - 9.0f, 18.0f, 18.0f);
     
-    // Right Attack Cluster: Authentic Arcade 2x2 Matrix with Ergonomic Thumb Slant
-    CGFloat atkCenterX = w - MAX(insets.right + 70.0f, 130.0f);
-    CGFloat atkCenterY = h - MAX(insets.bottom + 55.0f, 100.0f);
+    // Right Attack Cluster: Slanted 2x2 Matrix
+    CGFloat atkCenterX = w - MAX(insets.right + 45.0f * scale, 110.0f * scale) - spacingX/2.0f;
+    CGFloat atkCenterY = h - MAX(insets.bottom + 45.0f * scale, 85.0f * scale);
     
-    // Slant angle (18 degrees upwards to right)
-    CGFloat angle = 18.0f * (M_PI / 180.0f);
+    // Collision guard: Ensure right edge of DPad and left edge of attack cluster never overlap
+    CGFloat dpadRightEdge = _dpadCenter.x + _dpadRadius + 20.0f;
+    CGFloat atkLeftEdge = atkCenterX - spacingX - btnSize/2.0f;
+    if (atkLeftEdge < dpadRightEdge) {
+        CGFloat shift = dpadRightEdge - atkLeftEdge + 10.0f;
+        atkCenterX += shift;
+    }
+    
+    // Slant angle (16 degrees upwards to right)
+    CGFloat angle = 16.0f * (M_PI / 180.0f);
     CGFloat cosA = cosf(angle);
     CGFloat sinA = sinf(angle);
     
-    // Local 2x2 matrix unrotated offsets:
-    // Top-left: (-spacingX/2, -spacingY/2)  -> LP (1)
-    // Top-right: (+spacingX/2, -spacingY/2) -> RP (2)
-    // Bottom-left: (-spacingX/2, +spacingY/2)  -> LK (3)
-    // Bottom-right: (+spacingX/2, +spacingY/2) -> RK (4)
     auto rotatePoint = [&](CGFloat lx, CGFloat ly) -> CGPoint {
         CGFloat rx = lx * cosA - ly * sinA;
         CGFloat ry = lx * sinA + ly * cosA;
@@ -589,23 +580,23 @@
     _btnLK.layer.cornerRadius = btnSize / 2.0f;
     _btnRK.layer.cornerRadius = btnSize / 2.0f;
     
-    // Macro Buttons Arc (Comfortably above the 4 attack buttons)
-    CGFloat arcBaseY = atkCenterY - spacingY - 26.0f;
-    _btn1Plus2.frame = CGRectMake(atkCenterX - spacingX - 18.0f, arcBaseY + 12.0f, macroW, macroH);
-    _btn3Plus4.frame = CGRectMake(atkCenterX - spacingX/2.0f - 8.0f, arcBaseY - 2.0f, macroW, macroH);
-    _btn1Plus3.frame = CGRectMake(atkCenterX + 8.0f, arcBaseY - 2.0f, macroW, macroH);
-    _btn2Plus4.frame = CGRectMake(atkCenterX + spacingX/2.0f + 18.0f, arcBaseY + 12.0f, macroW, macroH);
+    // Macro Buttons Arc (Comfortably above the attack buttons with no overlap)
+    CGFloat macroY = MIN(ptLP.y, ptRP.y) - btnSize/2.0f - macroH - 12.0f;
+    _btn1Plus2.frame = CGRectMake(atkCenterX - spacingX - 10.0f, macroY + 8.0f, macroW, macroH);
+    _btn3Plus4.frame = CGRectMake(atkCenterX - spacingX/2.0f + 2.0f, macroY - 2.0f, macroW, macroH);
+    _btn1Plus3.frame = CGRectMake(atkCenterX + 6.0f, macroY - 2.0f, macroW, macroH);
+    _btn2Plus4.frame = CGRectMake(atkCenterX + spacingX/2.0f + 18.0f, macroY + 8.0f, macroW, macroH);
     
-    _btnRage.frame = CGRectMake(atkCenterX - 28.0f, arcBaseY - 36.0f, 56.0f, 26.0f);
-    _btnRage.layer.cornerRadius = 13.0f;
+    _btnRage.frame = CGRectMake(atkCenterX - 24.0f * scale, macroY - 32.0f * scale, 48.0f * scale, 24.0f * scale);
+    _btnRage.layer.cornerRadius = 12.0f * scale;
     
     // Logs drawer resizing
     if (_logDrawerView) {
-        CGFloat drawerW = MIN(w - 32.0f, 680.0f);
-        CGFloat drawerH = MIN(h - 80.0f, 320.0f);
-        CGFloat targetY = _isLogsDrawerOpen ? (MAX(insets.top, 16.0f) + 40.0f) : (-drawerH - 30.0f);
+        CGFloat drawerW = MIN(w - 24.0f, 660.0f);
+        CGFloat drawerH = MIN(h - 50.0f, 300.0f);
+        CGFloat targetY = _isLogsDrawerOpen ? (MAX(insets.top, 14.0f) + 38.0f) : (-drawerH - 30.0f);
         _logDrawerView.frame = CGRectMake((w - drawerW)/2.0f, targetY, drawerW, drawerH);
-        _logTextView.frame = CGRectMake(12, 46, drawerW - 24, drawerH - 54);
+        _logTextView.frame = CGRectMake(10, 42, drawerW - 20, drawerH - 48);
     }
 }
 

@@ -9,6 +9,8 @@ NSString * const TekkenLogUpdatedNotification = @"TekkenLogUpdatedNotification";
 static TekkenLogger *s_sharedLogger = nil;
 static os_unfair_lock s_logLock = OS_UNFAIR_LOCK_INIT;
 static FILE *s_logFile = NULL;
+static FILE *s_mirrorLogFile = NULL;
+static FILE *s_sessionLogFile = NULL;
 static int s_pipeFds[2];
 static dispatch_source_t s_pipeSource = nil;
 
@@ -44,9 +46,24 @@ static void TekkenSignalHandler(int sig) {
     NSString *crashPath = [[TekkenLogger sharedLogger] crashFilePath];
     [crashReport writeToFile:crashPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
     
+    // Also write to root Documents/crash.log
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    if (paths.count > 0) {
+        NSString *rootCrash = [paths.firstObject stringByAppendingPathComponent:@"crash.log"];
+        [crashReport writeToFile:rootCrash atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    }
+    
     if (s_logFile) {
         fputs(crashReport.UTF8String, s_logFile);
         fflush(s_logFile);
+    }
+    if (s_mirrorLogFile) {
+        fputs(crashReport.UTF8String, s_mirrorLogFile);
+        fflush(s_mirrorLogFile);
+    }
+    if (s_sessionLogFile) {
+        fputs(crashReport.UTF8String, s_sessionLogFile);
+        fflush(s_sessionLogFile);
     }
     
     signal(sig, SIG_DFL);
@@ -57,7 +74,9 @@ static void TekkenSignalHandler(int sig) {
     NSMutableArray<NSString *> *_memoryLogs;
     NSDateFormatter *_dateFormatter;
     NSString *_logPath;
+    NSString *_rootLogPath;
     NSString *_crashPath;
+    NSString *_sessionLogPath;
 }
 @end
 
@@ -81,12 +100,23 @@ static void TekkenSignalHandler(int sig) {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
         NSString *docs = paths.firstObject ?: NSTemporaryDirectory();
         
-        // Ensure logs directory exists
+        // Ensure logs directory exists (~/Documents/logs/)
         NSString *logsDir = [docs stringByAppendingPathComponent:@"logs"];
         [[NSFileManager defaultManager] createDirectoryAtPath:logsDir withIntermediateDirectories:YES attributes:nil error:nil];
         
-        _logPath = [docs stringByAppendingPathComponent:@"tekken6.log"];
-        _crashPath = [docs stringByAppendingPathComponent:@"crash.log"];
+        // Write primary log inside ~/Documents/logs/tekken6.log
+        _logPath = [logsDir stringByAppendingPathComponent:@"tekken6.log"];
+        // Also mirror to ~/Documents/tekken6.log for immediate root access
+        _rootLogPath = [docs stringByAppendingPathComponent:@"tekken6.log"];
+        
+        // Crash logs inside ~/Documents/logs/crash.log
+        _crashPath = [logsDir stringByAppendingPathComponent:@"crash.log"];
+        
+        // Session log inside ~/Documents/logs/session_<time>.log
+        NSDateFormatter *sessionFmt = [[NSDateFormatter alloc] init];
+        sessionFmt.dateFormat = @"yyyyMMdd_HHmmss";
+        NSString *timeStr = [sessionFmt stringFromDate:[NSDate date]];
+        _sessionLogPath = [logsDir stringByAppendingPathComponent:[NSString stringWithFormat:@"session_%@.log", timeStr]];
     }
     return self;
 }
@@ -94,12 +124,32 @@ static void TekkenSignalHandler(int sig) {
 - (void)setupLogging {
     os_unfair_lock_lock(&s_logLock);
     
+    const char *header = [NSString stringWithFormat:@"\n\n=== Tekken 6 iOS Log Session Started: %s ===\n", [NSDate date].description.UTF8String].UTF8String;
+    
     if (!s_logFile) {
-        // Open ~/Documents/tekken6.log in append mode
+        // 1. Logs folder: Documents/logs/tekken6.log
         s_logFile = fopen(_logPath.UTF8String, "a");
         if (s_logFile) {
-            fprintf(s_logFile, "\n\n=== Tekken 6 iOS Log Session Started: %s ===\n", [NSDate date].description.UTF8String);
+            fprintf(s_logFile, "%s", header);
             fflush(s_logFile);
+        }
+    }
+    
+    if (!s_mirrorLogFile) {
+        // 2. Root folder mirror: Documents/tekken6.log
+        s_mirrorLogFile = fopen(_rootLogPath.UTF8String, "a");
+        if (s_mirrorLogFile) {
+            fprintf(s_mirrorLogFile, "%s", header);
+            fflush(s_mirrorLogFile);
+        }
+    }
+    
+    if (!s_sessionLogFile) {
+        // 3. Unique session log: Documents/logs/session_YYYYMMDD_HHMMSS.log
+        s_sessionLogFile = fopen(_sessionLogPath.UTF8String, "w");
+        if (s_sessionLogFile) {
+            fprintf(s_sessionLogFile, "%s", header);
+            fflush(s_sessionLogFile);
         }
     }
     
@@ -112,7 +162,6 @@ static void TekkenSignalHandler(int sig) {
     
     // Redirect stdout & stderr using POSIX pipe so all printf and runtime messages are saved
     if (pipe(s_pipeFds) == 0) {
-        // Duplicate stdout & stderr to the pipe write-end
         dup2(s_pipeFds[1], STDOUT_FILENO);
         dup2(s_pipeFds[1], STDERR_FILENO);
         
@@ -142,7 +191,9 @@ static void TekkenSignalHandler(int sig) {
     
     os_unfair_lock_unlock(&s_logLock);
     
-    [self logMessage:@"[Tekken 6 Logger] Logging subsystem initialized. Target: Documents/tekken6.log"];
+    [self logMessage:[NSString stringWithFormat:@"[Tekken 6 Logger] Logging subsystem initialized. Target: %@", _logPath]];
+    [self logMessage:[NSString stringWithFormat:@"[Tekken 6 Logger] Mirrored log: %@", _rootLogPath]];
+    [self logMessage:[NSString stringWithFormat:@"[Tekken 6 Logger] Session log: %@", _sessionLogPath]];
 }
 
 - (void)logMessage:(NSString *)message {
@@ -156,6 +207,14 @@ static void TekkenSignalHandler(int sig) {
     if (s_logFile) {
         fprintf(s_logFile, "%s\n", formatted.UTF8String);
         fflush(s_logFile);
+    }
+    if (s_mirrorLogFile) {
+        fprintf(s_mirrorLogFile, "%s\n", formatted.UTF8String);
+        fflush(s_mirrorLogFile);
+    }
+    if (s_sessionLogFile) {
+        fprintf(s_sessionLogFile, "%s\n", formatted.UTF8String);
+        fflush(s_sessionLogFile);
     }
     
     if (_memoryLogs.count >= 600) {
@@ -205,9 +264,13 @@ static void TekkenSignalHandler(int sig) {
         fclose(s_logFile);
         s_logFile = fopen(_logPath.UTF8String, "w");
     }
+    if (s_mirrorLogFile) {
+        fclose(s_mirrorLogFile);
+        s_mirrorLogFile = fopen(_rootLogPath.UTF8String, "w");
+    }
     os_unfair_lock_unlock(&s_logLock);
     
-    [self logMessage:@"[Tekken 6 Logger] Log file cleared."];
+    [self logMessage:@"[Tekken 6 Logger] Log files cleared."];
 }
 
 @end
