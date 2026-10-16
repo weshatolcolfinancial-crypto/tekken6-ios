@@ -98,9 +98,8 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
     tp_cmake = sdk_dir / "thirdparty" / "CMakeLists.txt"
     if tp_cmake.exists():
         content = tp_cmake.read_text(encoding="utf-8")
-        original = content
         
-        # Replace unconditional or APPLE vulkan-loader with NOT IOS check
+        # Replace unconditional vulkan-loader / moltenvk with NOT IOS check
         content = re.sub(
             r'add_subdirectory\s*\(\s*vulkan-loader\s*\)',
             'if(NOT IOS)\n    add_subdirectory(vulkan-loader)\nendif()',
@@ -111,9 +110,35 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             'if(NOT IOS)\n    add_subdirectory(moltenvk)\nendif()',
             content
         )
-        if content != original:
-            tp_cmake.write_text(content, encoding="utf-8")
-            print("[OK] Patched thirdparty/CMakeLists.txt to exclude vulkan-loader/moltenvk on iOS.")
+
+        # Guard set_target_properties or target_* on vulkan/moltenvk if target does not exist or on iOS
+        content = re.sub(
+            r'(set_target_properties\s*\(\s*vulkan\b[\s\S]*?\))',
+            r'if(TARGET vulkan AND NOT IOS)\n\1\nendif()',
+            content
+        )
+        content = re.sub(
+            r'(set_target_properties\s*\(\s*moltenvk\b[\s\S]*?\))',
+            r'if(TARGET moltenvk AND NOT IOS)\n\1\nendif()',
+            content
+        )
+
+        # On iOS, define interface stub targets for vulkan and Vulkan::Loader so linking succeeds
+        ios_stubs = (
+            "\nif(IOS)\n"
+            "    if(NOT TARGET vulkan)\n"
+            "        add_library(vulkan INTERFACE)\n"
+            "    endif()\n"
+            "    if(NOT TARGET Vulkan::Loader)\n"
+            "        add_library(Vulkan::Loader INTERFACE)\n"
+            "    endif()\n"
+            "endif()\n"
+        )
+        if "add_library(Vulkan::Loader INTERFACE)" not in content:
+            content = ios_stubs + content
+
+        tp_cmake.write_text(content, encoding="utf-8")
+        print("[OK] Patched thirdparty/CMakeLists.txt for iOS Vulkan targets.")
 
     # 3. Patch thirdparty/vulkan-loader: On iOS, MoltenVK framework is used directly, not desktop vulkan-loader
     for vk_cmake in [
