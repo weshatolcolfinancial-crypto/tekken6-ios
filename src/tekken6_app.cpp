@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <filesystem>
 
-#if __has_include(<rex/rex_app.h>)
+#if __has_include(<imgui.h>) && __has_include(<rex/rex_app.h>)
 
 void Tekken6App::OnConfigurePaths(rex::PathConfig& paths) {
     rex::ReXApp::OnConfigurePaths(paths);

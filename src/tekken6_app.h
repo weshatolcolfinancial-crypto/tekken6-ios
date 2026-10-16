@@ -6,7 +6,7 @@
 #include <string>
 #include <memory>
 
-#if __has_include(<rex/cvar.h>)
+#if __has_include(<imgui.h>) && __has_include(<rex/rex_app.h>)
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
 #include <rex/rex_app.h>
@@ -25,7 +25,7 @@
 
 #include "tekken6_hooks.h"
 
-#if __has_include(<rex/rex_app.h>)
+#if __has_include(<imgui.h>) && __has_include(<rex/rex_app.h>)
 class Tekken6App : public rex::ReXApp {
 public:
   using rex::ReXApp::ReXApp;

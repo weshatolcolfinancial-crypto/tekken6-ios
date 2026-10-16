@@ -368,9 +368,9 @@ static void InitializeDispatchTable(uint8_t* base) {
 #if TEKKEN6_WITH_GAME
     TekkenLog("[Tekken 6 Dispatcher] Registering recompiled PPC functions into dispatch table...");
     size_t registeredCount = 0;
-    for (size_t i = 0; PPCFuncMappings[i].func != nullptr; ++i) {
-        uint32_t addr = PPCFuncMappings[i].address;
-        PPCFunc* func = PPCFuncMappings[i].func;
+    for (size_t i = 0; PPCFuncMappings[i].host != nullptr; ++i) {
+        uint32_t addr = static_cast<uint32_t>(PPCFuncMappings[i].guest);
+        PPCFunc* func = PPCFuncMappings[i].host;
         if (addr >= REX_CODE_BASE && addr < (REX_CODE_BASE + REX_CODE_SIZE + REX_THUNK_RESERVE_SIZE)) {
             REX_LOOKUP_FUNC(base, addr) = func;
             registeredCount++;
@@ -408,6 +408,7 @@ static void* Tekken6GuestThread(void* arg) {
     PPCContext ctx{};
     
     // Initialize primary guest thread stack at 0x7FF00000
+    uint8_t* base = s_guestMemoryBase;
     ctx.r1.u32 = 0x7FF00000;
     REX_STORE_U32(ctx.r1.u32, 0); // Null frame terminator
     ctx.r13.u32 = 0x82000000;    // Small Data Area base pointer
