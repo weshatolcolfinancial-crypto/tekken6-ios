@@ -16,10 +16,13 @@ struct PPCContext {
     // Additional state truncated as we only access GPRs in these hooks
 };
 
+extern "C" void TekkenLog(const char *format, ...);
+
 void Tekken6InitHooks() {
     printf("[Tekken 6 iOS] Initializing runtime hooks...\n");
-    printf("[Tekken 6 iOS] Target internal 3D render resolution: %ux%u\n", g_tekken_render_width, g_tekken_render_height);
-    printf("[Tekken 6 iOS] ProMotion 120Hz presentation mode: %s\n", g_tekken_enable_promotion_120hz ? "ENABLED" : "LOCKED 60Hz");
+    TekkenLog("[Tekken 6 iOS] Initializing runtime hooks (Resolution: %ux%u, ProMotion: %s)",
+              g_tekken_render_width, g_tekken_render_height,
+              g_tekken_enable_promotion_120hz ? "120Hz" : "60Hz");
 }
 
 void Tekken6SetResolutionPreset(int preset) {

@@ -14,19 +14,26 @@ enum TekkenInputButtons : uint32_t {
     BTN_RIGHT_THUMB    = 1 << 7,
     BTN_LEFT_SHOULDER  = 1 << 8,  // LB (1+2 Macro)
     BTN_RIGHT_SHOULDER = 1 << 9,  // RB (2+4 Macro)
-    BTN_A              = 1 << 12, // LK (3)
-    BTN_B              = 1 << 13, // RK (4)
-    BTN_X              = 1 << 14, // LP (1)
-    BTN_Y              = 1 << 15, // RP (2)
+    BTN_A              = 1 << 12, // LK (3 - Left Kick)
+    BTN_B              = 1 << 13, // RK (4 - Right Kick)
+    BTN_X              = 1 << 14, // LP (1 - Left Punch)
+    BTN_Y              = 1 << 15, // RP (2 - Right Punch)
     BTN_LEFT_TRIGGER   = 1 << 16, // LT (3+4 Macro)
     BTN_RIGHT_TRIGGER  = 1 << 17, // RT (1+3 Macro)
     BTN_RAGE_MACRO     = BTN_LEFT_SHOULDER | BTN_RIGHT_SHOULDER | BTN_LEFT_TRIGGER | BTN_RIGHT_TRIGGER, // 1+2+3+4
+};
+
+typedef NS_ENUM(NSInteger, TouchLayoutSize) {
+    TouchLayoutSizeNormal = 0,
+    TouchLayoutSizeLarge = 1,
+    TouchLayoutSizeCompact = 2
 };
 
 @protocol TouchOverlayDelegate <NSObject>
 - (void)touchInputChanged:(uint32_t)pressedButtons;
 - (void)togglePromotionRequested;
 - (void)toggleAspectRatioRequested;
+- (void)rescanGameRequested;
 @end
 
 @interface TouchOverlayView : UIView
@@ -34,8 +41,14 @@ enum TekkenInputButtons : uint32_t {
 @property (nonatomic, weak) id<TouchOverlayDelegate> delegate;
 @property (nonatomic, assign) BOOL isPromotion120Hz;
 @property (nonatomic, assign) BOOL isUltrawideFull;
+@property (nonatomic, assign) TouchLayoutSize layoutSize;
+@property (nonatomic, assign) CGFloat controlsOpacity;
 
 - (void)setControllerConnected:(BOOL)connected;
 - (void)updateAspectRatioButton:(BOOL)isFull;
+- (void)toggleLogsDrawer;
+- (void)showLogsDrawer:(BOOL)show;
+- (void)appendLogLine:(NSString *)line;
+- (void)setGameStatusBadgeText:(NSString *)text color:(UIColor *)color;
 
 @end

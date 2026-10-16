@@ -95,6 +95,7 @@ set(APP_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ViewController.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/TouchOverlayView.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/GameControllerManager.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/TekkenLogger.mm"
     "${TEKKEN6_REPO}/src/tekken6_hooks.cpp"
 )
 
@@ -122,6 +123,8 @@ target_include_directories(Tekken6 PRIVATE
 target_compile_definitions(Tekken6 PRIVATE
     REX_PLATFORM_IOS=1
     TEKKEN6_PROMOTION_120HZ=1
+    $<$<BOOL:${TEKKEN6_WITH_GAME}>:TEKKEN6_WITH_GAME=1>
+    $<$<NOT:$<BOOL:${TEKKEN6_WITH_GAME}>>:TEKKEN6_WITH_GAME=0>
 )
 
 target_compile_options(Tekken6 PRIVATE
