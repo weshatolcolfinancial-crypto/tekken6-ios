@@ -136,6 +136,12 @@ if(MOLTENVK_FRAMEWORK)
     )
 endif()
 
+# Embed App Icons & iTunesArtwork into Tekken6.app
+add_custom_command(TARGET Tekken6 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons" "$<TARGET_BUNDLE_DIR:Tekken6>"
+    COMMENT "Embedding app icons and iTunesArtwork into Tekken6.app"
+)
+
 set_target_properties(Tekken6 PROPERTIES
     MACOSX_BUNDLE YES
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
