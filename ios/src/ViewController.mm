@@ -37,9 +37,8 @@ extern "C" {
     _metalLayer.maximumDrawableCount = 3;
     _metalLayer.presentsWithTransaction = NO;
     
-    // In iOS 16+, synchronize presentation with display refresh cadence
+    // In iOS 16+, disable extended dynamic range overhead for standard rendering
     if (@available(iOS 16.0, *)) {
-        _metalLayer.displaySyncEnabled = YES;
         _metalLayer.wantsExtendedDynamicRangeContent = NO;
     }
     

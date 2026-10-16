@@ -67,9 +67,9 @@
     GCExtendedGamepad *profile = controller.extendedGamepad;
     if (!profile) return;
     
-    __weak typeof(self) weakSelf = self;
+    __weak GameControllerManager *weakSelf = self;
     profile.valueChangedHandler = ^(GCExtendedGamepad * _Nonnull gamepad, GCControllerElement * _Nonnull element) {
-        __strong typeof(weakSelf) strongSelf = weakSelf;
+        GameControllerManager *strongSelf = weakSelf;
         if (!strongSelf) return;
         
         uint32_t buttons = 0;
