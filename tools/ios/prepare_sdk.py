@@ -585,6 +585,34 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             krnl_rtl_cpp.write_text(content, encoding="utf-8")
             print("[OK] Patched xboxkrnl_rtl.cpp with safe critical section thread handling.")
 
+    # 11. Patch src/kernel/xboxkrnl/xboxkrnl_video.cpp: Feed VdSwap frontbuffer frames directly to Tekken6SetActiveFrame
+    krnl_video_cpp = sdk_dir / "src" / "kernel" / "xboxkrnl" / "xboxkrnl_video.cpp"
+    if krnl_video_cpp.exists():
+        content = krnl_video_cpp.read_text(encoding="utf-8")
+        if "Tekken6SetActiveFrame" not in content:
+            header_inject = (
+                '\nextern "C" void Tekken6SetActiveFrame(const void* pixels, uint32_t width, uint32_t height, uint32_t stride);\n'
+            )
+            content = header_inject + content
+            swap_hook = (
+                '\n    if (REX_KERNEL_MEMORY() && frontbuffer_virtual_address != 0 && width && height) {\n'
+                '      uint8_t* fb_host = REX_KERNEL_MEMORY()->TranslateVirtual<uint8_t*>(frontbuffer_virtual_address);\n'
+                '      uint32_t fb_w = static_cast<uint32_t>(*width);\n'
+                '      uint32_t fb_h = static_cast<uint32_t>(*height);\n'
+                '      if (fb_host && fb_w > 0 && fb_h > 0) {\n'
+                '        Tekken6SetActiveFrame(fb_host, fb_w, fb_h, fb_w * 4);\n'
+                '      }\n'
+                '    }\n'
+            )
+            content = re.sub(
+                r'(uint32_t frontbuffer_virtual_address\s*=\s*gpu_fetch\.base_address\s*<<\s*12;\s*)',
+                r'\1' + swap_hook,
+                content,
+                count=1
+            )
+            krnl_video_cpp.write_text(content, encoding="utf-8")
+            print("[OK] Patched xboxkrnl_video.cpp to feed VdSwap frontbuffer frames to Tekken6SetActiveFrame.")
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Prepare ReXGlue SDK for iOS")

@@ -256,12 +256,6 @@ bool Tekken6MountGameData(const char* gameDirectory) {
     return !s_mountedArchives.empty();
 }
 
-// Background stage pixels cached from extracted retail splash artwork
-static std::vector<uint32_t> s_baseStagePixels;
-static uint32_t s_baseStageWidth = 1280;
-static uint32_t s_baseStageHeight = 720;
-static bool s_hasStageBase = false;
-
 void Tekken6SetActiveFrame(const void* pixels, uint32_t width, uint32_t height, uint32_t stride) {
     if (!pixels || width == 0 || height == 0) return;
     
@@ -273,13 +267,6 @@ void Tekken6SetActiveFrame(const void* pixels, uint32_t width, uint32_t height, 
     size_t totalBytes = (size_t)s_activeFrameStride * height;
     s_activeFramePixels.resize(totalBytes / 4);
     memcpy(s_activeFramePixels.data(), pixels, totalBytes);
-    
-    if (!s_hasStageBase && width >= 640 && height >= 360) {
-        s_baseStagePixels = s_activeFramePixels;
-        s_baseStageWidth = width;
-        s_baseStageHeight = height;
-        s_hasStageBase = true;
-    }
     
     s_activeFrameIndex++;
     s_hasActiveFrame = true;
@@ -396,79 +383,121 @@ static std::unique_ptr<rex::Runtime> s_guestRuntime;
 #if __has_include(<rex/system/thread_state.h>)
 static std::unique_ptr<rex::runtime::ThreadState> s_primaryGuestThreadState;
 #endif
-
-static void EnsureRuntimeSetup(const char* gameDir) {
-    if (s_guestRuntime || rex::Runtime::instance()) return;
-    try {
-        TekkenLog("[Tekken 6 Native] Initializing ReXGlue Runtime environment...");
-        std::filesystem::path gameRoot = gameDir ? gameDir : "game";
-        s_guestRuntime = std::make_unique<rex::Runtime>(gameRoot);
-        rex::RuntimeConfig config{};
-        config.tool_mode = false;
-#if __has_include(<rex/kernel/init.h>)
-        config.kernel_init = rex::kernel::InitializeKernel;
-#endif
-        auto status = s_guestRuntime->Setup(std::move(config));
-        if (status == 0) {
-            TekkenLog("[Tekken 6 Native] ReXGlue Runtime initialized successfully. KernelState active.");
-        } else {
-            TekkenLog("[Tekken 6 Native] ReXGlue Runtime setup status: 0x%08X (using native memory arena fallback).", (uint32_t)status);
-        }
-    } catch (const std::exception& e) {
-        TekkenLog("[Tekken 6 Native] Runtime setup caught exception: %s", e.what());
-    } catch (...) {
-        TekkenLog("[Tekken 6 Native] Runtime setup caught unknown exception.");
-    }
-}
 #endif
 
 static void* Tekken6GuestThread(void* arg) {
     const char* gameDir = reinterpret_cast<const char*>(arg);
     TekkenLog("==================================================");
     TekkenLog("[Tekken 6 Native] Retail Guest Thread Started (16MB Stack)");
-    TekkenLog("[Tekken 6 Native] Target Executable: default.xex");
+    TekkenLog("[Tekken 6 Native] Target Executable: Default.xex / default.xex");
     TekkenLog("[Tekken 6 Native] Title ID: 0x4E4D07FC / 0x4E4D07E6 (Tekken 6 Retail)");
     TekkenLog("[Tekken 6 Native] Retail Entry Point: 0x824BEA50 (xstart)");
     TekkenLog("==================================================");
     
-    // 1. Reserve 4GB virtual address space for Xbox 360 guest memory
-    const size_t arenaSize = 0x100000000ull; // 4GB virtual arena
-    s_guestMemoryBase = AllocateGuestMemory(arenaSize);
+    std::filesystem::path gameRoot = gameDir ? gameDir : "game";
+
+#if __has_include(<rex/runtime.h>)
+    try {
+        TekkenLog("[Tekken 6 Native] Initializing ReXGlue Runtime environment (Root: %s)...", gameRoot.string().c_str());
+        s_guestRuntime = std::make_unique<rex::Runtime>(gameRoot);
+        rex::RuntimeConfig config{};
+        config.tool_mode = false;
+#if __has_include(<rex/kernel/init.h>)
+        config.kernel_init = rex::kernel::InitializeKernel;
+#endif
+
+#if TEKKEN6_WITH_GAME
+        auto status = s_guestRuntime->Setup(PPCImageConfig, std::move(config));
+#else
+        auto status = s_guestRuntime->Setup(std::move(config));
+#endif
+        if (status == 0) {
+            TekkenLog("[Tekken 6 Native] ReXGlue Runtime initialized successfully with PPCImageConfig.");
+        } else {
+            TekkenLog("[Tekken 6 Native] ReXGlue Runtime Setup status: 0x%08X", (uint32_t)status);
+        }
+    } catch (const std::exception& e) {
+        TekkenLog("[Tekken 6 Native] Runtime setup exception: %s", e.what());
+    } catch (...) {
+        TekkenLog("[Tekken 6 Native] Runtime setup unknown exception.");
+    }
+#endif
+
+    // 1. Acquire the authentic guest virtual memory arena
+#if __has_include(<rex/runtime.h>)
+    if (s_guestRuntime && s_guestRuntime->memory()) {
+        s_guestMemoryBase = s_guestRuntime->memory()->virtual_membase();
+    }
+#endif
+
+    if (!s_guestMemoryBase) {
+        TekkenLog("[Tekken 6 Native] Allocating fallback guest memory arena...");
+        const size_t arenaSize = 0x100000000ull; // 4GB virtual arena
+        s_guestMemoryBase = AllocateGuestMemory(arenaSize);
+    }
+
     if (!s_guestMemoryBase) {
         TekkenLog("[Tekken 6 Native] FATAL: Guest memory allocation failed. Aborting guest startup.");
         g_tekken_guest_running = false;
         return nullptr;
     }
-    s_guestMemorySize = arenaSize;
-    
+    s_guestMemorySize = 0x100000000ull;
+    TekkenLog("[Tekken 6 Native] Active guest memory arena at %p", s_guestMemoryBase);
+
     // 2. Populate indirect call dispatch table
     InitializeDispatchTable(s_guestMemoryBase);
-    
-    // 3. Setup KPCR (Processor Control Region), TLS array, and primary guest stack
+
+    // 3. Load authentic retail Default.xex image into guest memory (PE sections, data, symbols)
+#if __has_include(<rex/runtime.h>)
+    if (s_guestRuntime) {
+        std::string xexPath = "game:\\Default.xex";
+        std::error_code ec;
+        if (std::filesystem::exists(gameRoot / "default.xex", ec)) {
+            xexPath = "game:\\default.xex";
+        }
+        
+        TekkenLog("[Tekken 6 Native] Loading authentic retail XEX image: %s ...", xexPath.c_str());
+        auto xexStatus = s_guestRuntime->LoadXexImage(xexPath);
+        if (xexStatus != 0) {
+            std::filesystem::path directXex = gameRoot / "Default.xex";
+            if (!std::filesystem::exists(directXex, ec)) {
+                directXex = gameRoot / "default.xex";
+            }
+            TekkenLog("[Tekken 6 Native] Retrying LoadXexImage with host path: %s", directXex.string().c_str());
+            xexStatus = s_guestRuntime->LoadXexImage(directXex.string());
+        }
+        
+        if (xexStatus == 0) {
+            TekkenLog("[Tekken 6 Native] SUCCESS: Retail XEX image loaded into guest memory. PE sections and data ready.");
+        } else {
+            TekkenLog("[Tekken 6 Native] Notice: LoadXexImage status: 0x%08X (proceeding to execution)", (uint32_t)xexStatus);
+        }
+    }
+#endif
+
+    // 4. Setup KPCR (Processor Control Region), TLS array, and primary guest stack
     const uint32_t stack_base = 0x7FF00000u;
     const uint32_t stack_limit = 0x7F000000u; // 16MB stack limit
     const uint32_t pcr_addr = 0x7FF10000u;
     const uint32_t tls_addr = 0x7FF10800u;
-    
+
     uint8_t* base = s_guestMemoryBase;
     std::memset(base + pcr_addr, 0, 0x1000); // Zero KPCR & TLS memory block
-    
+
     // Wire up X_KPCR fields according to Xbox 360 ABI
     REX_STORE_U32(pcr_addr + 0x00, tls_addr);       // tls_ptr
     REX_STORE_U32(pcr_addr + 0x30, pcr_addr);       // pcr_ptr (self reference)
     REX_STORE_U32(pcr_addr + 0x70, stack_base);     // stack_base_ptr
     REX_STORE_U32(pcr_addr + 0x74, stack_limit);    // stack_end_ptr (limit)
-    
-    // 4. Prepare CPU Context and Stack
+
+    // 5. Prepare CPU Context and Stack
     TekkenLog("[Tekken 6 Native] Initializing PowerPC execution context...");
     PPCContext ctx{};
     ctx.r1.u32 = stack_base;
     REX_STORE_U32(ctx.r1.u32, 0); // Null frame terminator
     ctx.r13.u32 = pcr_addr;       // r13 points to KPCR
-    
-#if __has_include(<rex/runtime.h>)
-    EnsureRuntimeSetup(gameDir);
-#if __has_include(<rex/system/thread_state.h>)
+
+#if __has_include(<rex/runtime.h>) && __has_include(<rex/system/thread_state.h>)
     if (s_guestRuntime && s_guestRuntime->memory()) {
         try {
             s_primaryGuestThreadState = std::make_unique<rex::runtime::ThreadState>(
@@ -481,10 +510,9 @@ static void* Tekken6GuestThread(void* arg) {
         }
     }
 #endif
-#endif
-    
+
     TekkenLog("[Tekken 6 Native] Transferring control to retail entry point xstart at 0x824BEA50...");
-    
+
 #if TEKKEN6_WITH_GAME
     try {
         xstart(ctx, s_guestMemoryBase);

@@ -68,11 +68,6 @@ static NSString *const kTekkenMetalShaderSource = @""
     BOOL _isUltrawideFull;
     BOOL _gameEngineStarted;
     
-    // Transitional staging view until game engine takes over
-    UIView *_gameArenaView;
-    UIImageView *_gameBgImageView;
-    UILabel *_arenaHeaderLabel;
-    double _arenaAnimTime;
     
     // FPS & Diagnostics HUD
     UILabel *_fpsHudLabel;
@@ -165,10 +160,7 @@ static NSString *const kTekkenMetalShaderSource = @""
     // 1. Setup Metal textured quad rendering pipeline
     [self setupMetalPipeline];
     
-    // 2. Setup Live Gameplay Arena Viewport (Transitional backdrop)
-    [self setupGameArenaView];
-    
-    // 3. Setup Display Link with ProMotion Frame Rate Range
+    // 2. Setup Display Link with ProMotion Frame Rate Range
     [self setupDisplayLink];
     
     // 4. Setup fighting touch overlay (On top of viewport)
@@ -240,88 +232,6 @@ static NSString *const kTekkenMetalShaderSource = @""
     }
 }
 
-- (void)loadGameFrameFromImage:(UIImage *)image {
-    if (!image) return;
-    CGImageRef cgImage = image.CGImage;
-    if (!cgImage) return;
-    
-    size_t w = CGImageGetWidth(cgImage);
-    size_t h = CGImageGetHeight(cgImage);
-    if (w == 0 || h == 0) return;
-    
-    size_t targetW = (w > 1280) ? 1280 : w;
-    size_t targetH = (h > 720) ? 720 : h;
-    
-    NSMutableData *pixelData = [NSMutableData dataWithLength:targetW * targetH * 4];
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(pixelData.mutableBytes,
-                                                 targetW,
-                                                 targetH,
-                                                 8,
-                                                 targetW * 4,
-                                                 colorSpace,
-                                                 kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little); // BGRA
-    
-    if (context) {
-        CGContextDrawImage(context, CGRectMake(0, 0, targetW, targetH), cgImage);
-        CGContextRelease(context);
-        
-        Tekken6SetActiveFrame(pixelData.bytes, (uint32_t)targetW, (uint32_t)targetH, (uint32_t)(targetW * 4));
-        [self updateGameTextureWithPixels:pixelData.bytes width:(uint32_t)targetW height:(uint32_t)targetH stride:(uint32_t)(targetW * 4)];
-        [[TekkenLogger sharedLogger] logMessage:[NSString stringWithFormat:@"[Presentation] Converted retail artwork into %lux%lu active Metal game buffer.", (unsigned long)targetW, (unsigned long)targetH]];
-    }
-    CGColorSpaceRelease(colorSpace);
-}
-
-#pragma mark - Live Combat Arena Viewport
-
-- (void)setupGameArenaView {
-    _gameArenaView = [[UIView alloc] initWithFrame:self.view.bounds];
-    _gameArenaView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _gameArenaView.backgroundColor = [UIColor blackColor];
-    _gameArenaView.userInteractionEnabled = NO;
-    [self.view addSubview:_gameArenaView];
-    
-    _gameBgImageView = [[UIImageView alloc] initWithFrame:_gameArenaView.bounds];
-    _gameBgImageView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _gameBgImageView.contentMode = UIViewContentModeScaleAspectFill;
-    _gameBgImageView.clipsToBounds = YES;
-    
-    UIImage *bgImg = nil;
-    NSString *bundlePath = [[NSBundle mainBundle] pathForResource:@"tekken6_bg" ofType:@"jpg"];
-    if (bundlePath && [[NSFileManager defaultManager] fileExistsAtPath:bundlePath]) {
-        bgImg = [UIImage imageWithContentsOfFile:bundlePath];
-    }
-    if (!bgImg) {
-        NSString *directPath = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"tekken6_bg.jpg"];
-        if ([[NSFileManager defaultManager] fileExistsAtPath:directPath]) {
-            bgImg = [UIImage imageWithContentsOfFile:directPath];
-        }
-    }
-    if (!bgImg) {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *docBg = [paths.firstObject stringByAppendingPathComponent:@"tekken6_bg.jpg"];
-        if ([[NSFileManager defaultManager] fileExistsAtPath:docBg]) {
-            bgImg = [UIImage imageWithContentsOfFile:docBg];
-        }
-    }
-    
-    if (bgImg) {
-        _gameBgImageView.image = bgImg;
-        [[TekkenLogger sharedLogger] logMessage:@"[Arena] Loaded startup staging background."];
-    } else {
-        _gameBgImageView.backgroundColor = [UIColor colorWithRed:0.04f green:0.05f blue:0.08f alpha:1.0f];
-    }
-    [_gameArenaView addSubview:_gameBgImageView];
-    
-    // Header Label
-    _arenaHeaderLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 14, self.view.bounds.size.width - 40, 20)];
-    _arenaHeaderLabel.text = @"TEKKEN 6 • INITIALIZING NATIVE ENGINE • 120 FPS PROMOTION";
-    _arenaHeaderLabel.font = [UIFont fontWithName:@"HelveticaNeue-Bold" size:11.0f] ?: [UIFont boldSystemFontOfSize:11.0f];
-    _arenaHeaderLabel.textColor = [UIColor colorWithRed:1.0f green:0.85f blue:0.2f alpha:0.85f];
-    _arenaHeaderLabel.textAlignment = NSTextAlignmentCenter;
-    [_gameArenaView addSubview:_arenaHeaderLabel];
-}
 
 - (void)setupFpsCounter {
     _fpsHudLabel = [[UILabel alloc] initWithFrame:CGRectMake(24, 12, 200, 22)];
@@ -438,26 +348,10 @@ static NSString *const kTekkenMetalShaderSource = @""
         NSString *gameDir = [self gameDirectoryPath];
         Tekken6MountGameData([gameDir UTF8String]);
         
-        // Extract 1080p retail splash artwork from nxeart package if available
-        size_t splashLen = 0;
-        const uint8_t *splashBytes = Tekken6GetNxeartSplash(&splashLen);
-        if (splashBytes && splashLen > 0) {
-            NSData *splashData = [NSData dataWithBytes:splashBytes length:splashLen];
-            UIImage *retailSplash = [UIImage imageWithData:splashData];
-            if (retailSplash) {
-                _gameBgImageView.image = retailSplash;
-                [self loadGameFrameFromImage:retailSplash];
-                [[TekkenLogger sharedLogger] logMessage:@"[Tekken 6] Authentic 1080p retail game splash loaded from nxeart."];
-            }
-        }
-        
         uint32_t archiveCount = Tekken6GetMountedArchiveCount();
         uint32_t assetCount = Tekken6GetTotalAssetCount();
         
         [_touchOverlay setGameStatusBadgeText:@"GAME READY" color:[UIColor colorWithRed:0.0f green:1.0f blue:0.5f alpha:1.0f]];
-        _arenaHeaderLabel.text = [NSString stringWithFormat:@"TEKKEN 6 • %u ARCHIVES MOUNTED • %u ASSETS • 120 FPS",
-                                  archiveCount, assetCount];
-        
         [self showCombatDashboardCard];
     } else {
         [[TekkenLogger sharedLogger] logMessage:@"[Tekken 6] Awaiting game files in Documents/game. Presenting setup guide card."];
@@ -652,37 +546,21 @@ static NSString *const kTekkenMetalShaderSource = @""
     NSString *gameDir = [self gameDirectoryPath];
     Tekken6StartGuestEngine([gameDir UTF8String]);
     
-    // Check if extracted retail 1080p splash is ready to be loaded into active Metal texture
-    size_t splashLen = 0;
-    const uint8_t *splashBytes = Tekken6GetNxeartSplash(&splashLen);
-    if (splashBytes && splashLen > 0) {
-        NSData *splashData = [NSData dataWithBytes:splashBytes length:splashLen];
-        UIImage *retailSplash = [UIImage imageWithData:splashData];
-        if (retailSplash) {
-            [self loadGameFrameFromImage:retailSplash];
-        }
-    }
-    
-    // Smoothly fade out both the dashboard card AND the static placeholder arena view
+    // Smoothly fade out dashboard card
     [UIView animateWithDuration:0.35 animations:^{
         if (self->_setupCardView) {
             self->_setupCardView.alpha = 0.0f;
             self->_setupCardView.transform = CGAffineTransformMakeScale(0.92f, 0.92f);
         }
-        self->_gameArenaView.alpha = 0.0f;
     } completion:^(BOOL finished) {
         if (self->_setupCardView) {
             [self->_setupCardView removeFromSuperview];
             self->_setupCardView = nil;
         }
-        // HIDE STATIC VIEW ENTIRELY: Real game data rendered directly to CAMetalLayer
-        self->_gameArenaView.hidden = YES;
-        self->_gameBgImageView.hidden = YES;
     }];
     
     [_touchOverlay setGameStatusBadgeText:@"GAME RUNNING" color:[UIColor colorWithRed:0.0f green:1.0f blue:0.5f alpha:1.0f]];
-    _arenaHeaderLabel.text = @"TEKKEN 6 • RETAIL ENGINE ACTIVE • 120 FPS PROMOTION";
-    [[TekkenLogger sharedLogger] logMessage:@"[Tekken 6] Transitioned from static staging screen to active Metal game viewport."];
+    [[TekkenLogger sharedLogger] logMessage:@"[Tekken 6] Native guest engine running. Direct Metal viewport active."];
 }
 
 - (void)openLogsFromDashboard {
@@ -794,10 +672,6 @@ static NSString *const kTekkenMetalShaderSource = @""
     _metalLayer.drawableSize = CGSizeMake(viewport.size.width * [UIScreen mainScreen].nativeScale,
                                          viewport.size.height * [UIScreen mainScreen].nativeScale);
     
-    _gameArenaView.frame = self.view.bounds;
-    _gameBgImageView.frame = self.view.bounds;
-    _arenaHeaderLabel.frame = CGRectMake(20, 14, w - 40, 20);
-    
     if (_setupCardView) {
         _setupCardView.center = CGPointMake(w / 2.0f, h / 2.0f);
         [self.view bringSubviewToFront:_setupCardView];
@@ -869,8 +743,6 @@ static NSString *const kTekkenMetalShaderSource = @""
             _frameCount = 0;
             _fpsAccumulator = 0.0;
         }
-        
-        _arenaAnimTime += dt;
     }
     _lastFrameTimestamp = now;
     
@@ -881,12 +753,6 @@ static NSString *const kTekkenMetalShaderSource = @""
         if (activePixels && activeIdx != _lastRenderedFrameIndex) {
             [self updateGameTextureWithPixels:activePixels width:activeW height:activeH stride:activeStride];
             _lastRenderedFrameIndex = activeIdx;
-            
-            // Once game frames are ready, ensure static arena view is hidden
-            if (!_gameArenaView.hidden) {
-                _gameArenaView.hidden = YES;
-                _gameBgImageView.hidden = YES;
-            }
         }
     }
     
