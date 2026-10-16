@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Prepares the ReXGlue SDK tree for building the Tekken 6 iOS port.
-Clones ReXGlue SDK v0.10.0, downloads MoltenVK v1.4.1 for iOS, and applies iOS runtime patches.
+Clones ReXGlue SDK v0.10.0, downloads MoltenVK v1.4.1 for iOS, and applies iOS runtime/CMake patches.
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tarfile
@@ -60,25 +61,88 @@ def download_moltenvk(sdk_dir: pathlib.Path) -> None:
         tar.extractall(mvk_dir)
 
     tar_path.unlink()
+    
+    # Locate MoltenVK.framework inside extracted package and organize for CMake
+    framework_candidates = list(mvk_dir.rglob("MoltenVK.framework"))
+    for fw in framework_candidates:
+        if "ios" in str(fw).lower() or "iphone" in str(fw).lower():
+            target_fw_dir = mvk_dir / "ios-arm64"
+            target_fw_dir.mkdir(exist_ok=True)
+            dst = target_fw_dir / "MoltenVK.framework"
+            if not dst.exists():
+                import shutil
+                shutil.copytree(fw, dst)
+            break
+
     marker.write_text(f"{MOLTENVK_VERSION}\n")
     print(f"[OK] MoltenVK ready in {mvk_dir}")
 
 
 def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
+    print("[Tekken 6 iOS] Applying iOS patches to ReXGlue SDK...")
+
+    # 1. Patch platform.h
     platform_h = sdk_dir / "include" / "rex" / "platform.h"
     if platform_h.exists():
-        content = platform_h.read_text()
+        content = platform_h.read_text(encoding="utf-8")
         if "REX_PLATFORM_IOS" not in content:
-            print("Applying REX_PLATFORM_IOS patch to platform.h...")
             ios_def = (
                 "\n#if defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE\n"
                 "#define REX_PLATFORM_IOS 1\n"
                 "#endif\n"
             )
-            platform_h.write_text(content + ios_def)
+            platform_h.write_text(content + ios_def, encoding="utf-8")
             print("[OK] Applied platform.h patch.")
-        else:
-            print("[OK] platform.h already contains REX_PLATFORM_IOS.")
+
+    # 2. Patch thirdparty/CMakeLists.txt: Do NOT build desktop vulkan-loader / MoltenVK on iOS
+    tp_cmake = sdk_dir / "thirdparty" / "CMakeLists.txt"
+    if tp_cmake.exists():
+        content = tp_cmake.read_text(encoding="utf-8")
+        original = content
+        
+        # Replace unconditional or APPLE vulkan-loader with NOT IOS check
+        content = re.sub(
+            r'add_subdirectory\s*\(\s*vulkan-loader\s*\)',
+            'if(NOT IOS)\n    add_subdirectory(vulkan-loader)\nendif()',
+            content
+        )
+        content = re.sub(
+            r'add_subdirectory\s*\(\s*moltenvk\s*\)',
+            'if(NOT IOS)\n    add_subdirectory(moltenvk)\nendif()',
+            content
+        )
+        if content != original:
+            tp_cmake.write_text(content, encoding="utf-8")
+            print("[OK] Patched thirdparty/CMakeLists.txt to exclude vulkan-loader/moltenvk on iOS.")
+
+    # 3. Patch thirdparty/vulkan-loader/loader/CMakeLists.txt line 278 (MSVC unquoted variable bug)
+    vk_loader_cmake = sdk_dir / "thirdparty" / "vulkan-loader" / "loader" / "CMakeLists.txt"
+    if vk_loader_cmake.exists():
+        content = vk_loader_cmake.read_text(encoding="utf-8")
+        original = content
+        # Fix unquoted MSVC_C_ARCHITECTURE_ID: if(WIN32 AND ${MSVC_C_ARCHITECTURE_ID} MATCHES "arm64")
+        content = re.sub(
+            r'if\s*\(\s*WIN32\s+AND\s+\$\{MSVC_C_ARCHITECTURE_ID\}\s+MATCHES',
+            'if(WIN32 AND "${MSVC_C_ARCHITECTURE_ID}" MATCHES',
+            content
+        )
+        if content != original:
+            vk_loader_cmake.write_text(content, encoding="utf-8")
+            print("[OK] Patched vulkan-loader/loader/CMakeLists.txt arm64 check.")
+
+    # 4. Patch root CMakeLists.txt to define REX_PLATFORM_IOS
+    root_cmake = sdk_dir / "CMakeLists.txt"
+    if root_cmake.exists():
+        content = root_cmake.read_text(encoding="utf-8")
+        if "REX_PLATFORM_IOS" not in content:
+            insertion = (
+                "\nif(IOS)\n"
+                "    add_compile_definitions(REX_PLATFORM_IOS=1)\n"
+                "endif()\n"
+            )
+            content = content + insertion
+            root_cmake.write_text(content, encoding="utf-8")
+            print("[OK] Added REX_PLATFORM_IOS definition to root CMakeLists.txt.")
 
 
 def main() -> int:
@@ -93,7 +157,7 @@ def main() -> int:
     download_moltenvk(sdk_dir)
     apply_ios_patches(sdk_dir)
 
-    print("\n[SUCCESS] ReXGlue SDK for iOS is ready!")
+    print("\n[SUCCESS] ReXGlue SDK for iOS is completely configured and patched!")
     return 0
 
 
