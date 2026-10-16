@@ -174,10 +174,11 @@ if(MOLTENVK_FRAMEWORK AND EXISTS "${MOLTENVK_FRAMEWORK}")
     )
 endif()
 
-# Embed App Icons & iTunesArtwork into Tekken6.app
+# Embed App Icons, Arena Background & iTunesArtwork into Tekken6.app
 add_custom_command(TARGET Tekken6 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons" "$<TARGET_BUNDLE_DIR:Tekken6>"
-    COMMENT "Embedding app icons and iTunesArtwork into Tekken6.app"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/tekken6_bg.jpg" "$<TARGET_BUNDLE_DIR:Tekken6>/tekken6_bg.jpg"
+    COMMENT "Embedding app icons and arena background into Tekken6.app"
 )
 
 set_target_properties(Tekken6 PROPERTIES
