@@ -3,6 +3,16 @@
 #include <cstdint>
 
 #ifdef __cplusplus
+namespace rex::ppc {
+union Register;
+}
+using PPCRegister = rex::ppc::Register;
+
+// Mid-assembly hooks called by recompiled PPC guest code
+void Tekken6StartupWait(rex::ppc::Register& r11);
+void ApplyTekkenInternalResolution(rex::ppc::Register& r11, rex::ppc::Register& r10);
+void ApplyTekkenOffscreenResolution(rex::ppc::Register& r3, rex::ppc::Register& r4, rex::ppc::Register& r5);
+
 extern "C" {
 #endif
 
@@ -17,11 +27,6 @@ extern bool g_tekken_guest_running;
 void Tekken6InitHooks();
 void Tekken6SetResolutionPreset(int preset);
 bool Tekken6StartGuestEngine(const char* gameDirectory);
-
-// Mid-assembly hooks defined in tekken6_config.toml
-void Tekken6StartupWait(void* context);
-void ApplyTekkenInternalResolution(void* context);
-void ApplyTekkenOffscreenResolution(void* context);
 
 #ifdef __cplusplus
 }

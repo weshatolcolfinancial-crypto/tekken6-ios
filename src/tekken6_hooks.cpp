@@ -72,14 +72,30 @@ void Tekken6SetResolutionPreset(int preset) {
     printf("[Tekken 6 iOS] Resolution preset updated to %ux%u\n", g_tekken_render_width, g_tekken_render_height);
 }
 
-extern "C" {
+#if __has_include(<rex/ppc.h>)
+#include <rex/ppc.h>
+#else
+namespace rex::ppc {
+union Register {
+  int8_t s8;
+  uint8_t u8;
+  int16_t s16;
+  uint16_t u16;
+  int32_t s32;
+  uint32_t u32;
+  int64_t s64;
+  uint64_t u64;
+};
+}
+#endif
 
 /**
  * Mid-assembly hook at 0x8251C1FC (Tekken6StartupWait).
  * Tekken 6 spins waiting on secondary thread initialization queues.
  * Yielding the thread prevents CPU starvation and watchdog timeouts on Apple Silicon Mach kernels.
  */
-void Tekken6StartupWait(void* context) {
+void Tekken6StartupWait(rex::ppc::Register& r11) {
+    (void)r11;
     // Yield execution slice so worker threads complete initialization immediately
     std::this_thread::yield();
 }
@@ -88,14 +104,11 @@ void Tekken6StartupWait(void* context) {
  * Mid-assembly hook at 0x82219DB4 and 0x82219A28 (ApplyTekkenInternalResolution).
  * Intercepts the hardcoded 1024 (r11) and 576 (r10) resolution stores.
  */
-void ApplyTekkenInternalResolution(void* context) {
-    if (!context) return;
-    PPCContext* ctx = reinterpret_cast<PPCContext*>(context);
-    
+void ApplyTekkenInternalResolution(rex::ppc::Register& r11, rex::ppc::Register& r10) {
     // r11 holds width, r10 holds height
     if (g_tekken_render_width > 0 && g_tekken_render_height > 0) {
-        ctx->r[11] = static_cast<uint64_t>(g_tekken_render_width);
-        ctx->r[10] = static_cast<uint64_t>(g_tekken_render_height);
+        r11.u64 = static_cast<uint64_t>(g_tekken_render_width);
+        r10.u64 = static_cast<uint64_t>(g_tekken_render_height);
     }
 }
 
@@ -103,14 +116,10 @@ void ApplyTekkenInternalResolution(void* context) {
  * Mid-assembly hook at 0x821AB410 (ApplyTekkenOffscreenResolution).
  * Offscreen target 0x20000004 width & height (r4, r5).
  */
-void ApplyTekkenOffscreenResolution(void* context) {
-    if (!context) return;
-    PPCContext* ctx = reinterpret_cast<PPCContext*>(context);
-    
+void ApplyTekkenOffscreenResolution(rex::ppc::Register& r3, rex::ppc::Register& r4, rex::ppc::Register& r5) {
+    (void)r3;
     if (g_tekken_offscreen_width > 0 && g_tekken_offscreen_height > 0) {
-        ctx->r[4] = static_cast<uint64_t>(g_tekken_offscreen_width);
-        ctx->r[5] = static_cast<uint64_t>(g_tekken_offscreen_height);
+        r4.u64 = static_cast<uint64_t>(g_tekken_offscreen_width);
+        r5.u64 = static_cast<uint64_t>(g_tekken_offscreen_height);
     }
 }
-
-} // extern "C"
