@@ -26,9 +26,25 @@ if(NOT EXISTS "${MOLTENVK_DIR}")
 endif()
 
 find_library(MOLTENVK_FRAMEWORK MoltenVK
-    PATHS "${MOLTENVK_DIR}" "${TEKKEN6_SDK}"
+    PATHS "${MOLTENVK_DIR}/ios-arm64" "${MOLTENVK_DIR}" "${TEKKEN6_SDK}"
     PATH_SUFFIXES ios-arm64
+    NO_CMAKE_FIND_ROOT_PATH
 )
+
+if(NOT MOLTENVK_FRAMEWORK OR NOT EXISTS "${MOLTENVK_FRAMEWORK}")
+    file(GLOB_RECURSE MOLTENVK_CANDIDATES
+        "${MOLTENVK_DIR}/*MoltenVK.framework"
+        "${TEKKEN6_SDK}/*MoltenVK.framework"
+    )
+    foreach(cand ${MOLTENVK_CANDIDATES})
+        if(IS_DIRECTORY "${cand}" AND ("${cand}" MATCHES "ios" OR "${cand}" MATCHES "arm64"))
+            set(MOLTENVK_FRAMEWORK "${cand}")
+            break()
+        endif()
+    endforeach()
+endif()
+
+message(STATUS "Selected MoltenVK Framework: ${MOLTENVK_FRAMEWORK}")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

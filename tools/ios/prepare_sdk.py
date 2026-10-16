@@ -64,6 +64,7 @@ def download_moltenvk(sdk_dir: pathlib.Path) -> None:
     
     # Locate MoltenVK.framework inside extracted package and organize for CMake
     framework_candidates = list(mvk_dir.rglob("MoltenVK.framework"))
+    print(f"Discovered MoltenVK framework candidates: {[str(c) for c in framework_candidates]}")
     for fw in framework_candidates:
         if "ios" in str(fw).lower() or "iphone" in str(fw).lower():
             target_fw_dir = mvk_dir / "ios-arm64"
@@ -72,6 +73,7 @@ def download_moltenvk(sdk_dir: pathlib.Path) -> None:
             if not dst.exists():
                 import shutil
                 shutil.copytree(fw, dst)
+            print(f"[OK] Organized iOS MoltenVK framework at: {dst}")
             break
 
     marker.write_text(f"{MOLTENVK_VERSION}\n")
