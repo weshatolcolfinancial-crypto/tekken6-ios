@@ -2,6 +2,12 @@
 #import "TekkenLogger.h"
 #import <cmath>
 
+extern "C" {
+    extern uint32_t g_tekken_current_buttons;
+    extern float g_tekken_stick_x;
+    extern float g_tekken_stick_y;
+}
+
 @interface TouchOverlayView () {
     uint32_t _currentButtons;
     uint32_t _dpadButtons;
@@ -657,10 +663,16 @@
     // Deadzone
     if (dist < 14.0f) {
         _dpadButtons = 0;
+        g_tekken_stick_x = 0.0f;
+        g_tekken_stick_y = 0.0f;
         [self updateDpadVisuals:0];
         [self emitCombinedButtons];
         return;
     }
+    
+    // Analog stick values normalized between -1.0 and 1.0
+    g_tekken_stick_x = std::clamp((float)(dx / _dpadRadius), -1.0f, 1.0f);
+    g_tekken_stick_y = std::clamp((float)(-dy / _dpadRadius), -1.0f, 1.0f);
     
     // Angle in degrees (-180 to 180)
     CGFloat angle = atan2(dy, dx) * (180.0f / M_PI);
@@ -713,6 +725,8 @@
         self->_dpadKnob.center = CGPointMake(self->_dpadRadius, self->_dpadRadius);
     }];
     _dpadButtons = 0;
+    g_tekken_stick_x = 0.0f;
+    g_tekken_stick_y = 0.0f;
     [self updateDpadVisuals:0];
     [self emitCombinedButtons];
 }
@@ -725,6 +739,7 @@
     sender.alpha = 0.95f;
     
     _currentButtons |= (uint32_t)sender.tag;
+    g_tekken_current_buttons = (_currentButtons | _dpadButtons);
     [self emitCombinedButtons];
 }
 
@@ -733,6 +748,7 @@
     sender.alpha = _controlsOpacity;
     
     _currentButtons &= ~(uint32_t)sender.tag;
+    g_tekken_current_buttons = (_currentButtons | _dpadButtons);
     [self emitCombinedButtons];
 }
 

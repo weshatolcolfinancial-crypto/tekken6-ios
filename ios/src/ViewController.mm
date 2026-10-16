@@ -885,6 +885,9 @@ static NSString *const kTekkenMetalShaderSource = @""
     }
     _lastFrameTimestamp = now;
     
+    // Drive interactive combat simulation & frame rendering at 120 FPS
+    Tekken6UpdateInteractiveFrame(g_tekken_current_buttons, g_tekken_stick_x, g_tekken_stick_y, now);
+    
     // Check if recompiled engine has generated a new frame buffer
     void *activePixels = nullptr;
     uint32_t activeW = 0, activeH = 0, activeStride = 0, activeIdx = 0;

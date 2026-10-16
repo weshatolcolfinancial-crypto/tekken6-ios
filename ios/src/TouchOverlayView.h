@@ -2,6 +2,8 @@
 
 #import <UIKit/UIKit.h>
 
+#ifndef TEKKEN_INPUT_BUTTONS_DEFINED
+#define TEKKEN_INPUT_BUTTONS_DEFINED
 // Xbox 360 gamepad button bitmask matching ReXGlue input state
 enum TekkenInputButtons : uint32_t {
     BTN_DPAD_UP        = 1 << 0,
@@ -22,6 +24,7 @@ enum TekkenInputButtons : uint32_t {
     BTN_RIGHT_TRIGGER  = 1 << 17, // RT (1+3 Macro)
     BTN_RAGE_MACRO     = BTN_LEFT_SHOULDER | BTN_RIGHT_SHOULDER | BTN_LEFT_TRIGGER | BTN_RIGHT_TRIGGER, // 1+2+3+4
 };
+#endif
 
 typedef NS_ENUM(NSInteger, TouchLayoutSize) {
     TouchLayoutSizeNormal = 0,
