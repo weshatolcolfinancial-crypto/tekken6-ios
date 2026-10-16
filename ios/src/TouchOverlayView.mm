@@ -1,6 +1,11 @@
 #import "TouchOverlayView.h"
 #import "TekkenLogger.h"
 #import <cmath>
+#import <algorithm>
+
+static inline float clampf(float v, float minVal, float maxVal) {
+    return v < minVal ? minVal : (v > maxVal ? maxVal : v);
+}
 
 extern "C" {
     extern uint32_t g_tekken_current_buttons;
@@ -671,8 +676,8 @@ extern "C" {
     }
     
     // Analog stick values normalized between -1.0 and 1.0
-    g_tekken_stick_x = std::clamp((float)(dx / _dpadRadius), -1.0f, 1.0f);
-    g_tekken_stick_y = std::clamp((float)(-dy / _dpadRadius), -1.0f, 1.0f);
+    g_tekken_stick_x = clampf((float)(dx / _dpadRadius), -1.0f, 1.0f);
+    g_tekken_stick_y = clampf((float)(-dy / _dpadRadius), -1.0f, 1.0f);
     
     // Angle in degrees (-180 to 180)
     CGFloat angle = atan2(dy, dx) * (180.0f / M_PI);
