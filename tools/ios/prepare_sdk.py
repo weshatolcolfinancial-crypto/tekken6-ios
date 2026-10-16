@@ -324,12 +324,8 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
     sys_cmake = sdk_dir / "src" / "system" / "CMakeLists.txt"
     if sys_cmake.exists():
         content = sys_cmake.read_text(encoding="utf-8")
-        if "if(IOS)" not in content:
-            content = re.sub(
-                r'add_library\s*\(\s*rexruntime\s+SHARED',
-                'if(IOS)\n    add_library(rexruntime STATIC\nelse()\n    add_library(rexruntime SHARED\nendif()',
-                content
-            )
+        if "add_library(rexruntime STATIC" not in content:
+            content = content.replace("add_library(rexruntime SHARED", "add_library(rexruntime STATIC")
             sys_cmake.write_text(content, encoding="utf-8")
             print("[OK] Patched src/system/CMakeLists.txt to build rexruntime as STATIC on iOS.")
 
