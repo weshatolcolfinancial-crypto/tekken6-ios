@@ -2,13 +2,10 @@
 
 #include <cstdint>
 
-#if __has_include(<rex/ppc.h>)
-#include <rex/ppc.h>
-#else
+#ifdef __cplusplus
 namespace rex::ppc {
 union Register;
 }
-#endif
 
 // Mid-assembly hooks called by recompiled PPC guest code
 void Tekken6StartupWait(rex::ppc::Register& r11);
