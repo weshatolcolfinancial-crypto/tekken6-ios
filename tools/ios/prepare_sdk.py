@@ -115,20 +115,17 @@ def apply_ios_patches(sdk_dir: pathlib.Path) -> None:
             tp_cmake.write_text(content, encoding="utf-8")
             print("[OK] Patched thirdparty/CMakeLists.txt to exclude vulkan-loader/moltenvk on iOS.")
 
-    # 3. Patch thirdparty/vulkan-loader/loader/CMakeLists.txt line 278 (MSVC unquoted variable bug)
-    vk_loader_cmake = sdk_dir / "thirdparty" / "vulkan-loader" / "loader" / "CMakeLists.txt"
-    if vk_loader_cmake.exists():
-        content = vk_loader_cmake.read_text(encoding="utf-8")
-        original = content
-        # Fix unquoted MSVC_C_ARCHITECTURE_ID: if(WIN32 AND ${MSVC_C_ARCHITECTURE_ID} MATCHES "arm64")
-        content = re.sub(
-            r'if\s*\(\s*WIN32\s+AND\s+\$\{MSVC_C_ARCHITECTURE_ID\}\s+MATCHES',
-            'if(WIN32 AND "${MSVC_C_ARCHITECTURE_ID}" MATCHES',
-            content
-        )
-        if content != original:
-            vk_loader_cmake.write_text(content, encoding="utf-8")
-            print("[OK] Patched vulkan-loader/loader/CMakeLists.txt arm64 check.")
+    # 3. Patch thirdparty/vulkan-loader: On iOS, MoltenVK framework is used directly, not desktop vulkan-loader
+    for vk_cmake in [
+        sdk_dir / "thirdparty" / "vulkan-loader" / "CMakeLists.txt",
+        sdk_dir / "thirdparty" / "vulkan-loader" / "loader" / "CMakeLists.txt"
+    ]:
+        if vk_cmake.exists():
+            content = vk_cmake.read_text(encoding="utf-8")
+            if "if(IOS)" not in content:
+                content = "if(IOS)\n    return()\nendif()\n\n" + content
+                vk_cmake.write_text(content, encoding="utf-8")
+                print(f"[OK] Added iOS guard to {vk_cmake.name}")
 
     # 4. Patch root CMakeLists.txt to define REX_PLATFORM_IOS
     root_cmake = sdk_dir / "CMakeLists.txt"

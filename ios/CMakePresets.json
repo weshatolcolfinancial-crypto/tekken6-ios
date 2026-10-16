@@ -26,7 +26,10 @@
         "REXGLUE_USE_VULKAN": "ON",
         "REXGLUE_USE_D3D12": "OFF",
         "REXGLUE_ENABLE_TRACY": "OFF",
-        "REXGLUE_BUILD_TESTS": "OFF"
+        "REXGLUE_BUILD_TESTS": "OFF",
+        "BUILD_LOADER": "OFF",
+        "BUILD_TESTS": "OFF",
+        "ENABLE_WERROR": "OFF"
       }
     }
   ],
