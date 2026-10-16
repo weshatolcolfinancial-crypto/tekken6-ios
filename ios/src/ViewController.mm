@@ -68,10 +68,9 @@ static NSString *const kTekkenMetalShaderSource = @""
     BOOL _isUltrawideFull;
     BOOL _gameEngineStarted;
     
-    // Live Combat Arena Viewport (Transitional until game data takes over)
+    // Transitional staging view until game engine takes over
     UIView *_gameArenaView;
     UIImageView *_gameBgImageView;
-    CAShapeLayer *_combatEffectLayer;
     UILabel *_arenaHeaderLabel;
     double _arenaAnimTime;
     
@@ -314,12 +313,6 @@ static NSString *const kTekkenMetalShaderSource = @""
         _gameBgImageView.backgroundColor = [UIColor colorWithRed:0.04f green:0.05f blue:0.08f alpha:1.0f];
     }
     [_gameArenaView addSubview:_gameBgImageView];
-    
-    // Live Combat Visual Effects Layer
-    _combatEffectLayer = [CAShapeLayer layer];
-    _combatEffectLayer.frame = _gameArenaView.bounds;
-    _combatEffectLayer.fillColor = [UIColor clearColor].CGColor;
-    [_gameArenaView.layer addSublayer:_combatEffectLayer];
     
     // Header Label
     _arenaHeaderLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 14, self.view.bounds.size.width - 40, 20)];
@@ -803,7 +796,6 @@ static NSString *const kTekkenMetalShaderSource = @""
     
     _gameArenaView.frame = self.view.bounds;
     _gameBgImageView.frame = self.view.bounds;
-    _combatEffectLayer.frame = self.view.bounds;
     _arenaHeaderLabel.frame = CGRectMake(20, 14, w - 40, 20);
     
     if (_setupCardView) {
@@ -879,14 +871,8 @@ static NSString *const kTekkenMetalShaderSource = @""
         }
         
         _arenaAnimTime += dt;
-        if (!_gameEngineStarted) {
-            [self updateCombatFX:_arenaAnimTime];
-        }
     }
     _lastFrameTimestamp = now;
-    
-    // Drive interactive combat simulation & frame rendering at 120 FPS
-    Tekken6UpdateInteractiveFrame(g_tekken_current_buttons, g_tekken_stick_x, g_tekken_stick_y, now);
     
     // Check if recompiled engine has generated a new frame buffer
     void *activePixels = nullptr;
@@ -928,66 +914,6 @@ static NSString *const kTekkenMetalShaderSource = @""
     
     [commandBuffer presentDrawable:drawable];
     [commandBuffer commit];
-}
-
-- (void)updateCombatFX:(double)time {
-    CGFloat w = _gameArenaView.bounds.size.width;
-    CGFloat h = _gameArenaView.bounds.size.height;
-    if (w < 100 || h < 100) return;
-    
-    CGPoint center = CGPointMake(w / 2.0f, h / 2.0f);
-    uint32_t btns = g_tekken_current_buttons;
-    
-    UIBezierPath *path = [UIBezierPath bezierPath];
-    
-    if (btns & BTN_X) { // LP: Cyan Electric Left Punch Surge
-        CGFloat angle = (CGFloat)(time * 8.0);
-        CGPoint p1 = CGPointMake(center.x - 140.0f, center.y - 30.0f);
-        CGPoint p2 = CGPointMake(center.x + cos(angle) * 80.0f, center.y + sin(angle) * 40.0f);
-        [path moveToPoint:p1];
-        [path addQuadCurveToPoint:p2 controlPoint:CGPointMake(center.x - 20.0f, center.y - 70.0f)];
-        _combatEffectLayer.strokeColor = [UIColor colorWithRed:0.0f green:0.95f blue:1.0f alpha:0.9f].CGColor;
-        _combatEffectLayer.lineWidth = 4.5f;
-    } else if (btns & BTN_Y) { // RP: Amber Gold Right Punch Launcher Surge
-        CGFloat angle = (CGFloat)(time * 9.0);
-        CGPoint p1 = CGPointMake(center.x + 140.0f, center.y - 30.0f);
-        CGPoint p2 = CGPointMake(center.x - cos(angle) * 80.0f, center.y + sin(angle) * 40.0f);
-        [path moveToPoint:p1];
-        [path addQuadCurveToPoint:p2 controlPoint:CGPointMake(center.x + 20.0f, center.y - 80.0f)];
-        _combatEffectLayer.strokeColor = [UIColor colorWithRed:1.0f green:0.85f blue:0.1f alpha:0.9f].CGColor;
-        _combatEffectLayer.lineWidth = 4.5f;
-    } else if (btns & BTN_A) { // LK: Emerald Green Low Kick Flash
-        CGPoint p1 = CGPointMake(center.x - 160.0f, center.y + 60.0f);
-        CGPoint p2 = CGPointMake(center.x + 100.0f, center.y + 70.0f);
-        [path moveToPoint:p1];
-        [path addLineToPoint:p2];
-        _combatEffectLayer.strokeColor = [UIColor colorWithRed:0.0f green:0.95f blue:0.45f alpha:0.9f].CGColor;
-        _combatEffectLayer.lineWidth = 4.0f;
-    } else if (btns & BTN_B) { // RK: Crimson Red High Roundhouse Arc
-        CGPoint p1 = CGPointMake(center.x + 160.0f, center.y + 50.0f);
-        CGPoint p2 = CGPointMake(center.x - 120.0f, center.y - 50.0f);
-        [path moveToPoint:p1];
-        [path addQuadCurveToPoint:p2 controlPoint:CGPointMake(center.x + 40.0f, center.y - 100.0f)];
-        _combatEffectLayer.strokeColor = [UIColor colorWithRed:1.0f green:0.2f blue:0.35f alpha:0.9f].CGColor;
-        _combatEffectLayer.lineWidth = 4.5f;
-    } else if (btns & BTN_RAGE_MACRO || btns & BTN_LEFT_SHOULDER || btns & BTN_LEFT_TRIGGER) {
-        CGFloat pulse = sinf(time * 12.0f) * 40.0f;
-        [path moveToPoint:CGPointMake(center.x - 180.0f, center.y + pulse)];
-        [path addLineToPoint:CGPointMake(center.x, center.y - 60.0f)];
-        [path addLineToPoint:CGPointMake(center.x + 180.0f, center.y - pulse)];
-        _combatEffectLayer.strokeColor = [UIColor colorWithRed:0.3f green:0.8f blue:1.0f alpha:1.0f].CGColor;
-        _combatEffectLayer.lineWidth = 6.0f;
-    } else {
-        CGFloat sparkX = center.x + sinf(time * 3.0f) * 120.0f;
-        CGFloat sparkY = center.y + 110.0f + cosf(time * 5.0f) * 12.0f;
-        [path moveToPoint:CGPointMake(sparkX - 25.0f, sparkY)];
-        [path addLineToPoint:CGPointMake(sparkX, sparkY - 8.0f)];
-        [path addLineToPoint:CGPointMake(sparkX + 25.0f, sparkY + 4.0f)];
-        _combatEffectLayer.strokeColor = [UIColor colorWithRed:0.0f green:0.8f blue:1.0f alpha:0.35f].CGColor;
-        _combatEffectLayer.lineWidth = 1.8f;
-    }
-    
-    _combatEffectLayer.path = path.CGPath;
 }
 
 #pragma mark - TouchOverlayDelegate

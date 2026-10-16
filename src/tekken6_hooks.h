@@ -62,7 +62,9 @@ uint32_t Tekken6GetTotalAssetCount();
 // Metal Presentation Pipeline Bridge
 bool Tekken6GetActiveFrame(void** outPixels, uint32_t* outWidth, uint32_t* outHeight, uint32_t* outStride, uint32_t* outFrameIndex);
 void Tekken6SetActiveFrame(const void* pixels, uint32_t width, uint32_t height, uint32_t stride);
-void Tekken6UpdateInteractiveFrame(uint32_t buttons, float stickX, float stickY, double timeSec);
+
+// Input bridge for touch overlay and physical gamepads
+void Tekken6UpdateInput(uint32_t buttons, float stickX, float stickY);
 
 #ifdef __cplusplus
 }

@@ -97,6 +97,7 @@ set(APP_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/GameControllerManager.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/TekkenLogger.mm"
     "${TEKKEN6_REPO}/src/tekken6_hooks.cpp"
+    "${TEKKEN6_REPO}/src/tekken6_app.cpp"
 )
 
 # Generated game recompilation code (if default.xex was processed)
